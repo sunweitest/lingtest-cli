@@ -107,20 +107,25 @@
     <nav aria-label="文档目录">
       <a href="#vision">定位</a>
       <a href="#users">用户与场景</a>
+      <a href="#value">产品差异</a>
       <a href="#implemented">已实现</a>
       <a href="#workflow">工作流</a>
       <a href="#architecture">架构</a>
+      <a href="#trust">AI 信任边界</a>
+      <a href="#contracts">数据契约</a>
       <a href="#roadmap">路线图</a>
+      <a href="#metrics">成功指标</a>
       <a href="#quality">质量标准</a>
+      <a href="#governance">开源治理</a>
     </nav>
 
     <section id="vision">
       <h2>1. 产品定位</h2>
-      <p>LingTest CLI 是一个开源、可脚本化、本地优先的 API 测试工具。它把 OpenAPI 文档转换为普通 JSON 测试用例，让用户先审阅和修改，再对真实服务执行，并输出适合开发者和 CI 平台消费的报告。</p>
-      <p><strong>核心原则：</strong>确定性能力不依赖 AI；生成结果可审阅；密钥不写入用例；命令退出码可用于流水线门禁；Python SDK 与 CLI 共用同一套核心逻辑。</p>
-      <p class="flow">OpenAPI → 生成用例 → 人工审阅 → 执行 HTTP 请求 → JSON / JUnit 报告</p>
+      <p>LingTest CLI 是面向 Vibe Coding 工作流的开源 AI 测试 Agent。它读取 PRD、需求说明和 OpenAPI 文档，使用 LLM 发现需求风险并生成结构化测试计划，再由确定性执行引擎运行审核后的接口用例，最终输出可复现的测试证据和失败诊断。</p>
+      <p><strong>核心原则：</strong>AI 负责理解、扩展和诊断；确定性引擎负责执行和判定；任何 AI 输出必须经过结构校验和人工审阅；密钥不写入用例；命令退出码可用于流水线门禁；Python SDK 与 CLI 共用同一套核心逻辑。</p>
+      <p class="flow">PRD / OpenAPI → AI 分析与测试设计 → 人工审阅 → 确定性执行 → AI 诊断 → JSON / JUnit 证据</p>
       <h3>非目标</h3>
-      <p>0.x 阶段不替代完整的 API 管理平台，不提供 Web 协作后台，不承担生产流量压测，也不默认把接口文档或测试数据发送给第三方模型。</p>
+      <p>0.x 阶段不替代完整的 API 管理平台，不提供 Web 协作后台，不承担未经授权的生产流量测试，不把模型判断直接当作发布结论，也不在用户未选择 Provider 时发送文档或测试数据。</p>
     </section>
 
     <section id="users">
@@ -133,8 +138,20 @@
       </div>
     </section>
 
+    <section id="value">
+      <h2>3. 产品价值与差异化</h2>
+      <div class="grid">
+        <article class="item"><h3>从需求阶段开始</h3><p>传统 API runner 从已有用例开始；LingTest 在编码前检查需求歧义、矛盾、遗漏和不可测试描述，把返工风险提前暴露。</p></article>
+        <article class="item"><h3>AI 与确定性分层</h3><p>模型生成候选分析和用例，但 HTTP 状态、断言、退出码和报告由可重复执行的代码产生，避免用模型代替测试判定。</p></article>
+        <article class="item"><h3>审阅优先</h3><p>AI 结果先写入结构化 JSON，明确来源需求、优先级、步骤和预期结果；用户批准后才进入执行阶段。</p></article>
+        <article class="item"><h3>本地优先与可替换模型</h3><p>基础功能无需账号或云端服务；AI 层支持多家 OpenAI-compatible Provider，避免业务流程绑定单一模型供应商。</p></article>
+        <article class="item"><h3>面向 CI 的证据</h3><p>JSON 用于后续处理，JUnit 用于流水线展示，退出码用于质量门禁；诊断保留依据和置信度，而不是只给自然语言结论。</p></article>
+        <article class="item"><h3>从 CLI 演进为 Agent</h3><p>CLI 命令是未来 Agent 的稳定工具接口。Agent 可以编排分析、生成、执行和诊断，但每一步仍可单独调用、测试和审计。</p></article>
+      </div>
+    </section>
+
     <section id="implemented">
-      <h2>3. 已实现功能</h2>
+      <h2>4. 已实现功能</h2>
       <div class="grid">
         <article class="item done">
           <span class="tag">已实现</span><h3>OpenAPI 3.x 读取</h3>
@@ -200,7 +217,7 @@
     </section>
 
     <section id="workflow">
-      <h2>4. 用户工作流与命令</h2>
+      <h2>5. 用户工作流与命令</h2>
       <h3>AI 需求分析与测试设计</h3>
       <pre><code>lingtest analyze requirements.md -o analysis.json
 lingtest ai-generate requirements.md -o ai-cases.json</code></pre>
@@ -226,10 +243,21 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
           <tr><td><code>body</code></td><td>可选 JSON 请求体</td><td><code>{"name": "test"}</code></td></tr>
         </tbody>
       </table>
+      <h3>工作流状态</h3>
+      <table>
+        <thead><tr><th>状态</th><th>产生方式</th><th>进入下一阶段的条件</th></tr></thead>
+        <tbody>
+          <tr><td>需求待澄清</td><td><code>lingtest analyze</code></td><td>高风险歧义和矛盾已由负责人处理或明确接受。</td></tr>
+          <tr><td>测试计划待审阅</td><td><code>lingtest ai-generate</code></td><td>用例有明确依据、步骤、预期结果，并删除不安全数据。</td></tr>
+          <tr><td>可执行用例</td><td><code>lingtest generate</code> 或未来转换命令</td><td>请求目标、参数、认证和断言均已确认。</td></tr>
+          <tr><td>执行证据</td><td><code>lingtest run</code></td><td>报告完整保存，失败项进入诊断或人工调查。</td></tr>
+          <tr><td>诊断建议</td><td><code>lingtest diagnose</code></td><td>根据原始日志和系统证据复核后，才能形成缺陷结论。</td></tr>
+        </tbody>
+      </table>
     </section>
 
     <section id="architecture">
-      <h2>5. 技术架构</h2>
+      <h2>6. 技术架构</h2>
       <table>
         <thead><tr><th>模块</th><th>职责</th></tr></thead>
         <tbody>
@@ -238,31 +266,86 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
           <tr><td><code>models.py</code></td><td>Pydantic 公共数据模型。</td></tr>
           <tr><td><code>runner.py</code></td><td>HTTPX 同步执行器和结果聚合。</td></tr>
           <tr><td><code>io.py</code></td><td>JSON 用例、JSON 报告和 JUnit XML 序列化。</td></tr>
+          <tr><td><code>ai/provider.py</code></td><td>Provider 协议、内置服务地址、认证环境变量和 OpenAI-compatible HTTP 调用。</td></tr>
+          <tr><td><code>ai/structured.py</code></td><td>JSON 提取、Pydantic 校验和一次受控修复重试。</td></tr>
+          <tr><td><code>ai/service.py</code></td><td>PRD 分析、测试计划生成和失败诊断的业务编排。</td></tr>
+          <tr><td><code>ai/prompts.py</code></td><td>任务边界、输出 schema 和证据要求。</td></tr>
         </tbody>
       </table>
       <p>核心模块不依赖 FastAPI、Redis、Dramatiq 或数据库。未来模型 Provider、插件和并发执行器必须保持可选，避免破坏本地优先的基础安装体验。</p>
+      <h3>依赖方向</h3>
+      <p><code>CLI → Service → Provider / Structured Output → HTTPX / Pydantic</code>。Provider 不感知命令行，业务服务不读取环境变量，确定性 runner 不依赖 AI 模块，从而允许测试替身、离线执行和后续插件替换。</p>
+    </section>
+
+    <section id="trust">
+      <h2>7. AI 信任边界与安全模型</h2>
+      <table>
+        <thead><tr><th>风险</th><th>当前控制</th><th>后续控制</th></tr></thead>
+        <tbody>
+          <tr><td>模型输出无效或字段缺失</td><td>JSON 提取、Pydantic 严格校验、一次修复重试，失败则退出码 2。</td><td>保存原始响应摘要和 schema 版本，提供离线重放。</td></tr>
+          <tr><td>模型编造需求</td><td>Prompt 要求仅基于文档，并为用例保留 <code>source_requirement</code>。</td><td>需求引用定位、覆盖矩阵和无依据用例拦截。</td></tr>
+          <tr><td>敏感文档外发</td><td>只有调用 AI 命令时才发送文档；Provider 和地址由用户明确选择。</td><td>本地模型配置、内容脱敏、发送前预览和域名 allowlist。</td></tr>
+          <tr><td>API Key 泄露</td><td>密钥仅从环境变量读取，不进入命令输出、用例和报告。</td><td>系统密钥环集成、日志统一脱敏和凭据扫描。</td></tr>
+          <tr><td>AI 诊断被误当成事实</td><td>诊断包含分类、置信度、证据和建议；不修改原始报告。</td><td>人工确认状态、历史证据关联和诊断准确率评估。</td></tr>
+          <tr><td>未经授权执行测试</td><td>生成与执行分离，不自动运行 AI 用例。</td><td>目标 allowlist、危险方法确认、速率限制和 dry-run。</td></tr>
+        </tbody>
+      </table>
+      <h3>数据发送边界</h3>
+      <p><code>analyze</code> 和 <code>ai-generate</code> 会把文档内容发送给指定 Provider；<code>diagnose</code> 只发送失败或错误结果，不发送通过用例。<code>generate</code> 和 <code>run</code> 不调用 LLM。当前不提供模型响应缓存，也不持久化 API Key。</p>
+    </section>
+
+    <section id="contracts">
+      <h2>8. 数据契约与兼容策略</h2>
+      <table>
+        <thead><tr><th>产物</th><th>关键内容</th><th>兼容承诺</th></tr></thead>
+        <tbody>
+          <tr><td>需求分析</td><td>summary、ambiguities、contradictions、missing_requirements、testability_risks</td><td>0.x 可增加字段；删除或改义需在 changelog 标记。</td></tr>
+          <tr><td>AI 测试计划</td><td>risks、case_type、priority、steps、expected_result、source_requirement、可选 API 字段</td><td>执行前必须再次校验；AI 产物不自动视为可执行。</td></tr>
+          <tr><td>确定性用例</td><td>method、path、expected_status、headers、query、body</td><td>同一 minor 版本保持可读取；未来使用显式 schema_version。</td></tr>
+          <tr><td>运行报告</td><td>started_at、base_url、status、duration、预期/实际状态和 error</td><td>原始结果不可被 AI 诊断覆盖。</td></tr>
+          <tr><td>诊断报告</td><td>failure_type、confidence、diagnosis、evidence、suggestions</td><td>始终作为建议性派生产物保存。</td></tr>
+        </tbody>
+      </table>
+      <p>所有 JSON 文件使用 UTF-8。运行时 Header 不写入报告。未来破坏性 schema 变化必须升级主版本或提供迁移命令。</p>
     </section>
 
     <section id="roadmap">
-      <h2>6. 计划实现</h2>
+      <h2>9. 计划实现</h2>
       <div class="grid">
-        <article class="item planned"><span class="tag">0.2</span><h3>OpenAPI 引用解析</h3><p>支持本地和文档内 <code>$ref</code>、组合 schema、nullable、format 及更完整的 requestBody content。</p></article>
-        <article class="item planned"><span class="tag">0.2</span><h3>配置文件与环境</h3><p>增加 <code>lingtest.toml</code>、dev/staging 环境、变量替换、敏感值环境变量映射。</p></article>
-        <article class="item planned"><span class="tag">0.2</span><h3>用例过滤</h3><p>按 tag、operationId、路径、方法过滤；支持 include/exclude 和失败重跑。</p></article>
-        <article class="item planned"><span class="tag">0.2</span><h3>更多断言</h3><p>状态码之外增加 JSON path、schema、响应头、响应时间和包含关系断言。</p></article>
+        <article class="item planned"><span class="tag">0.3</span><h3>OpenAPI 引用解析</h3><p>支持本地和文档内 <code>$ref</code>、组合 schema、nullable、format 及更完整的 requestBody content。</p></article>
+        <article class="item planned"><span class="tag">0.3</span><h3>配置文件与环境</h3><p>增加 <code>lingtest.toml</code>、dev/staging 环境、变量替换、敏感值环境变量映射。</p></article>
+        <article class="item planned"><span class="tag">0.3</span><h3>用例过滤</h3><p>按 tag、operationId、路径、方法过滤；支持 include/exclude 和失败重跑。</p></article>
+        <article class="item planned"><span class="tag">0.3</span><h3>更多断言</h3><p>状态码之外增加 JSON path、schema、响应头、响应时间和包含关系断言。</p></article>
         <article class="item planned"><span class="tag">0.3</span><h3>认证策略</h3><p>支持 OpenAPI securitySchemes、Bearer、API Key、Basic 和可插拔 token 获取。</p></article>
         <article class="item planned"><span class="tag">0.3</span><h3>并发与重试</h3><p>提供可控并发、退避重试、速率限制；默认仍保持可预测的顺序执行。</p></article>
-        <article class="item planned"><span class="tag">0.3</span><h3>HTML 报告</h3><p>提供无需服务端即可打开的静态报告，包含摘要、耗时、失败详情和请求信息脱敏。</p></article>
         <article class="item planned"><span class="tag">0.3</span><h3>AI 用例执行转换</h3><p>把人工审核后的 AI API 用例转换为确定性 HTTP 用例，执行前再次进行 schema 和安全检查。</p></article>
-        <article class="item planned"><span class="tag">0.4</span><h3>pytest 导出</h3><p>把审核后的用例导出为可维护 pytest 脚本，支持团队纳入现有测试目录。</p></article>
+        <article class="item planned"><span class="tag">0.4</span><h3>HTML 报告与覆盖矩阵</h3><p>提供静态报告，并建立需求、用例、执行结果和诊断之间的可追踪关系。</p></article>
+        <article class="item planned"><span class="tag">0.4</span><h3>RAG 与 pytest 导出</h3><p>接入历史缺陷和测试规范，生成可维护 pytest 脚本，支持团队纳入现有测试目录。</p></article>
+        <article class="item planned"><span class="tag">0.5</span><h3>Agent 工具编排</h3><p>把分析、生成、执行和诊断暴露为可审计工具，加入预算、审批、目标 allowlist 和停止条件。</p></article>
         <article class="item planned"><span class="tag">1.0</span><h3>稳定 SDK 与插件协议</h3><p>承诺语义化版本兼容范围，为输入解析器、断言、认证和报告定义稳定扩展点。</p></article>
       </div>
       <h3>优先级原则</h3>
       <p>AI 已用于需求理解、测试设计和失败诊断；确定性执行仍不依赖模型。下一阶段优先打通“AI 生成、人工审核、确定性执行”，再扩展断言、并发、RAG 和 Agent 工具调用。</p>
     </section>
 
+    <section id="metrics">
+      <h2>10. 产品成功指标</h2>
+      <table>
+        <thead><tr><th>维度</th><th>指标</th><th>为什么重要</th></tr></thead>
+        <tbody>
+          <tr><td>首次价值</td><td>从安装到生成第一份有效分析或用例计划所需时间。</td><td>决定开源用户是否愿意继续试用。</td></tr>
+          <tr><td>有效性</td><td>人工接受的歧义、风险和测试用例比例。</td><td>衡量 AI 输出是否减少工作，而非制造审核负担。</td></tr>
+          <tr><td>可追踪性</td><td>能够关联到原始需求的用例比例。</td><td>控制幻觉并支撑覆盖分析。</td></tr>
+          <tr><td>稳定性</td><td>相同输入多次生成后，结构校验成功率和关键场景保持率。</td><td>衡量非确定性是否处于可管理范围。</td></tr>
+          <tr><td>执行价值</td><td>生成用例中经审核后可执行、能发现真实问题的比例。</td><td>避免只追求用例数量。</td></tr>
+          <tr><td>CI 适配</td><td>无人工交互执行成功率、报告解析成功率和平均执行时间。</td><td>确认工具能够进入真实工程流程。</td></tr>
+        </tbody>
+      </table>
+      <p>项目不把 Token 消耗、生成用例总数或自然语言篇幅作为核心成功指标。首要目标是有效测试证据和用户节省的审核、设计与定位时间。</p>
+    </section>
+
     <section id="quality">
-      <h2>7. 质量、安全与发布标准</h2>
+      <h2>11. 质量、安全与发布标准</h2>
       <ul>
         <li>支持 Python 3.11 和 3.12；Windows、Linux、macOS 进入 CI 矩阵。</li>
         <li>每个命令覆盖成功、测试失败和输入错误三类行为；公共模型保持向后兼容。</li>
@@ -271,7 +354,22 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
         <li>遵循语义化版本；0.x 允许快速迭代，但破坏性变更必须记录在 changelog。</li>
       </ul>
       <h3>0.2.0 验收目标</h3>
-      <p>Provider、PRD 分析、用例生成、结构校验和失败诊断必须具备无网络单元测试；基础执行器保持兼容；wheel 和 sdist 必须通过 Twine 元数据检查。</p>
+      <p>已完成：Provider、PRD 分析、用例生成、结构校验和失败诊断均具备无网络单元测试；基础执行器保持兼容；Ruff、pytest、wheel、sdist 和 Twine 元数据检查通过。</p>
+      <h3>发布门禁</h3>
+      <p>版本号、Git tag 和 PyPI release 必须一致；发布前检查工作区、测试、静态检查、构建、包元数据和 README 渲染；发布后从干净环境安装并运行 <code>lingtest --version</code>。0.x 版本不得暗示未实现的 Agent 自主能力。</p>
+    </section>
+
+    <section id="governance">
+      <h2>12. 开源治理与许可</h2>
+      <p>项目当前使用 MIT License，目的是降低个人、企业和测试工具厂商试用、集成及二次开发的门槛。使用者必须保留版权和许可证声明，软件按原样提供且不附带担保。</p>
+      <p>MIT 不要求修改后的版本继续开源，也不提供 Apache-2.0 那样明确的专利授权条款。若项目未来出现核心商业化、专利贡献或云服务竞争保护需求，应在接受大量外部贡献前重新评估 Apache-2.0、AGPL-3.0 或开源核心加商业许可；许可证变更不能追溯撤销已经按 MIT 获得的版本权利。</p>
+      <h3>贡献原则</h3>
+      <ul>
+        <li>贡献应包含测试，并说明对数据契约和兼容性的影响。</li>
+        <li>新增 Provider 不得记录或上传 API Key，不得绕过结构校验。</li>
+        <li>新增 AI 能力必须说明发送给第三方的数据、人工审批点和失败模式。</li>
+        <li>安全问题应通过私密渠道报告；建立正式流程前不要在公开 Issue 披露可利用细节。</li>
+      </ul>
     </section>
   </main>
   <footer>LingTest CLI · MIT License · 本文档随代码仓库维护</footer>
