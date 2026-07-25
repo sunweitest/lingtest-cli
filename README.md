@@ -1,51 +1,261 @@
 # LingTest CLI
 
-Local-first API testing from OpenAPI specifications. LingTest generates editable
-JSON test cases, runs them against an HTTP service, and writes JSON and JUnit
-reports suitable for CI.
+[简体中文](README.zh-CN.md) | English
 
-## Install
+LingTest CLI is a local-first API testing tool that turns OpenAPI documents
+into editable test cases, runs them against an HTTP service, and writes
+machine-readable reports for local development and CI.
 
-```powershell
+The deterministic core does not require an LLM or API key. Generated cases are
+plain JSON, so they can be reviewed and changed before any request is sent.
+
+> Status: `0.1.0` alpha. The file format and Python API may evolve before 1.0.
+
+## Features
+
+- Read OpenAPI specifications in YAML or JSON.
+- Discover GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS operations.
+- Generate values from `example`, `default`, `enum`, and schema types.
+- Resolve path parameters and generate query, header, and JSON body values.
+- Select the first documented 2xx response as the expected status.
+- Run cases with HTTPX using a configurable base URL and timeout.
+- Add runtime headers without storing credentials in generated cases.
+- Write detailed JSON reports and optional JUnit XML.
+- Return CI-friendly exit codes.
+- Use the same core through a small Python API.
+
+## Requirements
+
+- Python 3.11 or newer
+- An OpenAPI 3.x YAML or JSON document
+- Network access to the API under test when running cases
+
+## Installation
+
+With `pipx`:
+
+```bash
 pipx install lingtest-cli
 ```
 
-Python 3.11 or newer is required.
+With `uv`:
 
-## Quick start
+```bash
+uv tool install lingtest-cli
+```
 
-```powershell
+For an isolated project environment:
+
+```bash
+uv add --dev lingtest-cli
+uv run lingtest --help
+```
+
+## Quick Start
+
+Generate cases:
+
+```bash
 lingtest generate openapi.yaml -o cases.json
-lingtest run cases.json --base-url http://localhost:8000 --junit junit.xml
 ```
 
-Add authentication or other headers at runtime:
+Review `cases.json`, then run it:
+
+```bash
+lingtest run cases.json \
+  --base-url http://localhost:8000 \
+  --junit junit.xml \
+  -o report.json
+```
+
+PowerShell authentication example:
 
 ```powershell
-lingtest run cases.json --base-url https://api.example.com `
-  -H "Authorization:Bearer $env:API_TOKEN"
+lingtest run cases.json `
+  --base-url https://api.example.com `
+  -H "Authorization:Bearer $env:API_TOKEN" `
+  --junit junit.xml
 ```
 
-The run command returns exit code `1` when any test fails, making it suitable
-for CI pipelines. Generated cases are ordinary JSON and can be reviewed or
-edited before execution.
+Use `-H` multiple times to add more headers:
+
+```bash
+lingtest run cases.json --base-url https://api.example.com \
+  -H "Authorization:Bearer ${API_TOKEN}" \
+  -H "X-Tenant-ID:demo"
+```
+
+## Commands
+
+### `lingtest generate`
+
+```text
+lingtest generate SPEC [-o OUTPUT]
+```
+
+`SPEC` is an OpenAPI YAML or JSON file. The default output is
+`lingtest-cases.json`.
+
+### `lingtest run`
+
+```text
+lingtest run CASES_FILE --base-url URL [OPTIONS]
+```
+
+Important options:
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `--base-url` | Base URL of the API under test. It can also be provided through `LINGTEST_BASE_URL`. | Required |
+| `-o`, `--output` | JSON report path. | `lingtest-report.json` |
+| `--junit` | Optional JUnit XML report path. | Disabled |
+| `--timeout` | Per-request timeout in seconds. | `10.0` |
+| `-H`, `--header` | Runtime HTTP header in `NAME:VALUE` form. Repeatable. | None |
+
+Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | All test cases passed. |
+| `1` | One or more test cases failed or produced a request error. |
+| `2` | The command input or case file is invalid. |
+
+## Case File
+
+Generated files are JSON arrays. A case looks like this:
+
+```json
+{
+  "id": "get_user",
+  "title": "Get user",
+  "method": "GET",
+  "path": "/users/42",
+  "expected_status": 200,
+  "headers": {},
+  "query": {
+    "verbose": true
+  },
+  "body": null
+}
+```
+
+Edit `expected_status`, request values, or titles before execution. Do not put
+long-lived credentials in this file; inject them with `--header` and environment
+variables at runtime.
+
+## Reports
+
+The JSON report contains the start time, base URL, and a result for each case:
+
+- case ID and title
+- `passed`, `failed`, or `error` status
+- request duration in milliseconds
+- expected and actual HTTP status
+- a concise error message
+
+JUnit output can be uploaded to GitHub Actions, Jenkins, GitLab CI, Azure
+Pipelines, and other systems that support JUnit XML.
+
+## Python API
+
+```python
+from lingtest import generate_cases, run_cases
+
+cases = generate_cases("openapi.yaml")
+report = run_cases(cases, "http://localhost:8000")
+
+print(f"{report.passed} passed, {report.failed} failed")
+for result in report.results:
+    print(result.case_id, result.status, result.duration_ms)
+```
+
+The public data models are `TestCase`, `TestResult`, and `RunReport`.
+
+## CI Example
+
+```yaml
+name: API tests
+
+on: [push, pull_request]
+
+jobs:
+  lingtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install lingtest-cli
+      - run: lingtest generate openapi.yaml -o cases.json
+      - run: lingtest run cases.json --base-url "${{ secrets.TEST_API_URL }}" --junit junit.xml
+```
+
+The target API must be reachable from the runner. Start the service in an
+earlier step or point the command at a deployed test environment.
+
+## Current Limitations
+
+- `$ref` resolution and advanced schema composition are not implemented yet.
+- Assertions currently compare the HTTP status only.
+- Cases run sequentially.
+- OpenAPI security schemes are not applied automatically.
+- AI case generation and failure analysis are not part of version 0.1.
+
+See [product-design.html](product-design.html) for implemented scope, design
+decisions, and the roadmap.
 
 ## Development
 
-```powershell
+Clone the repository and install all development dependencies:
+
+```bash
 uv sync --extra dev
 uv run pytest
 uv run ruff check .
+```
+
+Build and validate distributions:
+
+```bash
 uv build
 uv run twine check dist/*
 ```
 
-## Scope
+Run the development CLI:
 
-Version 0.1 focuses on deterministic OpenAPI-driven smoke tests. AI-assisted
-case generation and failure analysis will be optional provider integrations;
-the core workflow does not require an API key.
+```bash
+uv run lingtest --version
+uv run lingtest generate examples/openapi.yaml -o cases.json
+```
+
+## Release
+
+1. Update the version in `pyproject.toml` and `src/lingtest/__init__.py`.
+2. Run tests, Ruff, `uv build`, and `twine check`.
+3. Commit the release and create a matching Git tag.
+4. Publish with `UV_PUBLISH_TOKEN`:
+
+```bash
+uv publish
+```
+
+## Security
+
+Only run generated cases against systems you are authorized to test. Runtime
+headers are not written to the report by version 0.1, but generated case files
+and reports should still be treated as project data.
+
+## Roadmap
+
+- Better OpenAPI schema and `$ref` support
+- Configuration files and named environments
+- Filtering by tag, operation, path, and method
+- JSON-path, schema, header, and latency assertions
+- Authentication strategies
+- Controlled concurrency and retries
+- Static HTML reports
+- Optional AI providers for case expansion and failure analysis
+- pytest export and a stable plugin API
 
 ## License
 
-MIT
+[MIT](LICENSE)
