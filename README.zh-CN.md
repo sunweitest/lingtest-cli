@@ -124,6 +124,33 @@ lingtest diagnose report.json -o diagnosis.json
 也可以使用 `--provider deepseek`、`--provider qwen`，或者通过
 `--provider custom --base-url URL --model MODEL` 接入自定义兼容服务。
 
+## 测试数据流
+
+```mermaid
+flowchart LR
+    PRD["PRD / 需求文档"] --> Analyze["lingtest analyze"]
+    Analyze --> Analysis["analysis.json<br/>歧义、矛盾和风险"]
+
+    PRD --> AIGenerate["lingtest ai-generate"]
+    OpenAPI["OpenAPI YAML / JSON"] --> AIGenerate
+    AIGenerate --> AIPlan["ai-cases.json<br/>结构校验后的测试计划"]
+    AIPlan --> Review["人工审核"]
+
+    OpenAPI --> Generate["lingtest generate"]
+    Generate --> Cases["cases.json<br/>可执行 HTTP 用例"]
+    Review -.->|0.3 计划实现的转换| Cases
+
+    Cases --> Run["lingtest run"]
+    Runtime["Base URL + 运行时 Header"] --> Run
+    Run --> JSONReport["report.json<br/>原始执行证据"]
+    Run --> JUnit["junit.xml<br/>CI 测试结果"]
+
+    JSONReport --> Diagnose["lingtest diagnose"]
+    Diagnose --> Diagnosis["diagnosis.json<br/>分类、证据和建议"]
+```
+
+实线表示 `0.2.0` 已经实现的数据流。AI 测试计划目前仍是需要人工审核的中间产物；把审核后的 AI 用例自动转换为确定性 HTTP 用例计划在 `0.3` 实现。诊断结果单独保存，不会覆盖原始运行报告。
+
 ## 命令说明
 
 ### `lingtest analyze`

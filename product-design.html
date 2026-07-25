@@ -218,6 +218,32 @@
 
     <section id="workflow">
       <h2>5. 用户工作流与命令</h2>
+      <h3>端到端测试数据流</h3>
+      <pre><code>PRD / Requirements
+  |-- lingtest analyze ------> analysis.json
+  |                             (ambiguities / contradictions / risks)
+  |
+  `-- lingtest ai-generate --> ai-cases.json --> Human review
+                                (validated plan)       |
+                                                       | planned in 0.3
+OpenAPI YAML / JSON                                    v
+  |-- lingtest ai-generate --> ai-cases.json      cases.json
+  |                                                (executable)
+  `-- lingtest generate -------------------------------^
+                                                       |
+Base URL + runtime headers ----------------------------+
+                                                       v
+                                                lingtest run
+                                                  |         |
+                                                  v         v
+                                            report.json   junit.xml
+                                                  |
+                                                  v
+                                          lingtest diagnose
+                                                  |
+                                                  v
+                                           diagnosis.json</code></pre>
+      <p>分析、AI 测试计划、确定性用例、原始执行报告和诊断报告是相互独立的产物。0.2.0 不会自动执行 AI 生成内容，也不会让诊断覆盖原始报告；人工审核后的 AI 用例到可执行用例的转换计划在 0.3 实现。</p>
       <h3>AI 需求分析与测试设计</h3>
       <pre><code>lingtest analyze requirements.md -o analysis.json
 lingtest ai-generate requirements.md -o ai-cases.json</code></pre>

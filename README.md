@@ -139,6 +139,36 @@ lingtest diagnose report.json -o diagnosis.json
 Use `--provider deepseek`, `--provider qwen`, or a custom OpenAI-compatible
 endpoint with `--provider custom --base-url URL --model MODEL`.
 
+## Test Data Flow
+
+```mermaid
+flowchart LR
+    PRD["PRD / Requirements"] --> Analyze["lingtest analyze"]
+    Analyze --> Analysis["analysis.json<br/>ambiguities and risks"]
+
+    PRD --> AIGenerate["lingtest ai-generate"]
+    OpenAPI["OpenAPI YAML / JSON"] --> AIGenerate
+    AIGenerate --> AIPlan["ai-cases.json<br/>validated test plan"]
+    AIPlan --> Review["Human review"]
+
+    OpenAPI --> Generate["lingtest generate"]
+    Generate --> Cases["cases.json<br/>executable HTTP cases"]
+    Review -.->|planned 0.3 conversion| Cases
+
+    Cases --> Run["lingtest run"]
+    Runtime["Base URL + runtime headers"] --> Run
+    Run --> JSONReport["report.json<br/>original evidence"]
+    Run --> JUnit["junit.xml<br/>CI result"]
+
+    JSONReport --> Diagnose["lingtest diagnose"]
+    Diagnose --> Diagnosis["diagnosis.json<br/>classification, evidence, advice"]
+```
+
+The solid path is implemented in `0.2.0`. AI plans remain review artifacts;
+automatic conversion from an approved AI plan to executable HTTP cases is
+planned for `0.3`. Diagnosis produces a separate file and never overwrites the
+original run report.
+
 ## Commands
 
 ### `lingtest analyze`
