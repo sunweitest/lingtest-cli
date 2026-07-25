@@ -22,6 +22,10 @@ def write_report(report: RunReport, path: Path) -> None:
     path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
 
+def read_report(path: Path) -> RunReport:
+    return RunReport.model_validate_json(path.read_text(encoding="utf-8"))
+
+
 def write_junit(report: RunReport, path: Path) -> None:
     suite = Element(
         "testsuite",
@@ -42,4 +46,3 @@ def write_junit(report: RunReport, path: Path) -> None:
             failure.text = result.error or ""
     path.parent.mkdir(parents=True, exist_ok=True)
     ElementTree(suite).write(path, encoding="utf-8", xml_declaration=True)
-

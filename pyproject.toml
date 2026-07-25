@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lingtest-cli"
-version = "0.1.0"
-description = "Local-first API testing from OpenAPI specifications"
+version = "0.2.0"
+description = "AI testing agent for PRDs, OpenAPI specifications, and Vibe Coding workflows"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "LingTest Contributors" }]
-keywords = ["testing", "openapi", "cli", "pytest", "api"]
+keywords = ["testing", "openapi", "cli", "pytest", "api", "ai", "vibe-coding"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -28,6 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ai = []
 dev = [
   "pytest>=8.2,<9",
   "pytest-cov>=5,<7",
@@ -39,9 +40,9 @@ dev = [
 lingtest = "lingtest.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/lingtest/lingtest-cli"
-Repository = "https://github.com/lingtest/lingtest-cli"
-Issues = "https://github.com/lingtest/lingtest-cli/issues"
+Homepage = "https://github.com/sunweitest/lingtest-cli"
+Repository = "https://github.com/sunweitest/lingtest-cli"
+Issues = "https://github.com/sunweitest/lingtest-cli/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lingtest"]
@@ -56,4 +57,3 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-

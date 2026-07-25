@@ -97,7 +97,7 @@
       <p class="lead">从 OpenAPI 到可审阅测试用例、自动执行和标准报告的本地优先 API 测试工具。</p>
       <div class="meta">
         <span>产品设计文档 v1.0</span>
-        <span>对应版本 0.1.0</span>
+        <span>对应版本 0.2.0</span>
         <span>更新日期 2026-07-25</span>
       </div>
     </div>
@@ -176,11 +176,34 @@
           <span class="tag">已实现</span><h3>工程化发行</h3>
           <p>采用 src layout、Hatchling、UV lock、PyPI 元数据、MIT License、pytest、Ruff 与 Twine 校验。</p>
         </article>
+        <article class="item done">
+          <span class="tag">0.2 已实现</span><h3>独立 LLM Provider</h3>
+          <p>支持 OpenAI、DeepSeek、Qwen 和自定义 OpenAI-compatible 服务；无 Redis、数据库或 Web 服务依赖。</p>
+        </article>
+        <article class="item done">
+          <span class="tag">0.2 已实现</span><h3>PRD 歧义分析</h3>
+          <p>识别歧义、逻辑矛盾、缺失需求和可测试性风险，并输出需要产品人员回答的问题。</p>
+        </article>
+        <article class="item done">
+          <span class="tag">0.2 已实现</span><h3>LLM 测试计划生成</h3>
+          <p>从 PRD 或 OpenAPI 生成功能、边界、异常和 API 用例，保留优先级、步骤、预期结果和需求依据。</p>
+        </article>
+        <article class="item done">
+          <span class="tag">0.2 已实现</span><h3>结构化输出校验</h3>
+          <p>提取模型 JSON 并通过 Pydantic 数据契约校验；失败时携带校验错误自动修复一次。</p>
+        </article>
+        <article class="item done">
+          <span class="tag">0.2 已实现</span><h3>AI 失败诊断</h3>
+          <p>仅分析失败和错误用例，区分产品、测试、环境、数据和依赖问题，并保留置信度和证据。</p>
+        </article>
       </div>
     </section>
 
     <section id="workflow">
       <h2>4. 用户工作流与命令</h2>
+      <h3>AI 需求分析与测试设计</h3>
+      <pre><code>lingtest analyze requirements.md -o analysis.json
+lingtest ai-generate requirements.md -o ai-cases.json</code></pre>
       <h3>安装和生成</h3>
       <pre><code>pipx install lingtest-cli
 lingtest generate openapi.yaml -o cases.json</code></pre>
@@ -190,6 +213,8 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
   -H "Authorization:Bearer $API_TOKEN" \
   --junit junit.xml \
   -o report.json</code></pre>
+      <h3>失败诊断</h3>
+      <pre><code>lingtest diagnose report.json -o diagnosis.json</code></pre>
       <h3>生成用例的数据契约</h3>
       <table>
         <thead><tr><th>字段</th><th>用途</th><th>示例</th></tr></thead>
@@ -228,12 +253,12 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
         <article class="item planned"><span class="tag">0.3</span><h3>认证策略</h3><p>支持 OpenAPI securitySchemes、Bearer、API Key、Basic 和可插拔 token 获取。</p></article>
         <article class="item planned"><span class="tag">0.3</span><h3>并发与重试</h3><p>提供可控并发、退避重试、速率限制；默认仍保持可预测的顺序执行。</p></article>
         <article class="item planned"><span class="tag">0.3</span><h3>HTML 报告</h3><p>提供无需服务端即可打开的静态报告，包含摘要、耗时、失败详情和请求信息脱敏。</p></article>
-        <article class="item planned"><span class="tag">0.4</span><h3>可选 AI Provider</h3><p>从需求文本补充边界和异常用例、分析失败原因；支持 OpenAI-compatible Provider，明确展示数据发送边界。</p></article>
+        <article class="item planned"><span class="tag">0.3</span><h3>AI 用例执行转换</h3><p>把人工审核后的 AI API 用例转换为确定性 HTTP 用例，执行前再次进行 schema 和安全检查。</p></article>
         <article class="item planned"><span class="tag">0.4</span><h3>pytest 导出</h3><p>把审核后的用例导出为可维护 pytest 脚本，支持团队纳入现有测试目录。</p></article>
         <article class="item planned"><span class="tag">1.0</span><h3>稳定 SDK 与插件协议</h3><p>承诺语义化版本兼容范围，为输入解析器、断言、认证和报告定义稳定扩展点。</p></article>
       </div>
       <h3>优先级原则</h3>
-      <p>先提高规范兼容性和确定性断言，再增加并发、报告和 AI。AI 能力作为可选增强，不能成为安装、生成或基础执行的必需条件。</p>
+      <p>AI 已用于需求理解、测试设计和失败诊断；确定性执行仍不依赖模型。下一阶段优先打通“AI 生成、人工审核、确定性执行”，再扩展断言、并发、RAG 和 Agent 工具调用。</p>
     </section>
 
     <section id="quality">
@@ -245,8 +270,8 @@ lingtest generate openapi.yaml -o cases.json</code></pre>
         <li>每次发布运行 pytest、Ruff、构建和 Twine 检查，并使用 Git tag 与 PyPI 版本一致。</li>
         <li>遵循语义化版本；0.x 允许快速迭代，但破坏性变更必须记录在 changelog。</li>
       </ul>
-      <h3>0.1.0 验收状态</h3>
-      <p>单元测试全部通过；Ruff 检查通过；wheel 和 sdist 构建成功；Twine 元数据检查通过；Git 已创建 <code>v0.1.0</code> 标签。PyPI 上传等待项目所有者配置 API token。</p>
+      <h3>0.2.0 验收目标</h3>
+      <p>Provider、PRD 分析、用例生成、结构校验和失败诊断必须具备无网络单元测试；基础执行器保持兼容；wheel 和 sdist 必须通过 Twine 元数据检查。</p>
     </section>
   </main>
   <footer>LingTest CLI · MIT License · 本文档随代码仓库维护</footer>

@@ -5,11 +5,14 @@ from typing import Annotated
 import typer
 
 from lingtest import __version__
-from lingtest.io import read_cases, write_cases, write_junit, write_report
+from lingtest.ai.provider import ProviderError, create_provider
+from lingtest.ai.service import analyze_prd, diagnose_failures, generate_test_plan
+from lingtest.ai.structured import StructuredOutputError
+from lingtest.io import read_cases, read_report, write_cases, write_junit, write_report
 from lingtest.openapi import generate_cases
 from lingtest.runner import run_cases
 
-app = typer.Typer(help="Generate and run API tests from OpenAPI.", no_args_is_help=True)
+app = typer.Typer(help="AI-assisted testing for PRDs and OpenAPI.", no_args_is_help=True)
 
 
 def version_callback(value: bool) -> None:
@@ -41,6 +44,75 @@ def generate(
         raise typer.Exit(2) from exc
     write_cases(cases, output)
     typer.echo(f"Generated {len(cases)} cases -> {output}")
+
+
+@app.command()
+def analyze(
+    document: Annotated[Path, typer.Argument(help="PRD or requirements document.")],
+    output: Annotated[Path, typer.Option("-o", "--output")] = Path("lingtest-analysis.json"),
+    provider: Annotated[str, typer.Option(help="openai, deepseek, qwen, or custom.")] = "openai",
+    model: Annotated[str | None, typer.Option()] = None,
+    base_url: Annotated[str | None, typer.Option()] = None,
+    language: Annotated[str, typer.Option()] = "zh-CN",
+) -> None:
+    """Find ambiguities, contradictions, missing requirements, and testability risks."""
+    try:
+        result = analyze_prd(
+            document,
+            _create_provider(provider, model, base_url),
+            language=language,
+        )
+        _write_model(result, output)
+    except (OSError, ValueError, ProviderError, StructuredOutputError) as exc:
+        _fail(exc)
+    typer.echo(
+        f"Found {len(result.ambiguities)} ambiguities and "
+        f"{len(result.contradictions)} contradictions -> {output}"
+    )
+
+
+@app.command("ai-generate")
+def ai_generate(
+    document: Annotated[Path, typer.Argument(help="PRD, requirements, or OpenAPI document.")],
+    output: Annotated[Path, typer.Option("-o", "--output")] = Path("lingtest-ai-cases.json"),
+    provider: Annotated[str, typer.Option(help="openai, deepseek, qwen, or custom.")] = "openai",
+    model: Annotated[str | None, typer.Option()] = None,
+    base_url: Annotated[str | None, typer.Option()] = None,
+    language: Annotated[str, typer.Option()] = "zh-CN",
+) -> None:
+    """Use an LLM to generate functional, boundary, exception, and API cases."""
+    try:
+        result = generate_test_plan(
+            document,
+            _create_provider(provider, model, base_url),
+            language=language,
+        )
+        _write_model(result, output)
+    except (OSError, ValueError, ProviderError, StructuredOutputError) as exc:
+        _fail(exc)
+    typer.echo(f"Generated {len(result.test_cases)} AI test cases -> {output}")
+
+
+@app.command()
+def diagnose(
+    report_file: Annotated[Path, typer.Argument(help="LingTest JSON run report.")],
+    output: Annotated[Path, typer.Option("-o", "--output")] = Path("lingtest-diagnosis.json"),
+    provider: Annotated[str, typer.Option(help="openai, deepseek, qwen, or custom.")] = "openai",
+    model: Annotated[str | None, typer.Option()] = None,
+    base_url: Annotated[str | None, typer.Option()] = None,
+    language: Annotated[str, typer.Option()] = "zh-CN",
+) -> None:
+    """Use an LLM to diagnose failed and errored test results."""
+    try:
+        result = diagnose_failures(
+            read_report(report_file),
+            _create_provider(provider, model, base_url),
+            language=language,
+        )
+        _write_model(result, output)
+    except (OSError, ValueError, ProviderError, StructuredOutputError) as exc:
+        _fail(exc)
+    typer.echo(f"Diagnosed {len(result.diagnoses)} failures -> {output}")
 
 
 @app.command("run")
@@ -81,6 +153,19 @@ def _parse_headers(values: list[str]) -> dict[str, str]:
     return headers
 
 
+def _create_provider(provider: str, model: str | None, base_url: str | None):
+    return create_provider(provider, model=model, base_url=base_url)
+
+
+def _write_model(model, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(model.model_dump_json(indent=2), encoding="utf-8")
+
+
+def _fail(exc: Exception) -> None:
+    typer.echo(f"Error: {exc}", err=True)
+    raise typer.Exit(2) from exc
+
+
 if __name__ == "__main__":
     app()
-

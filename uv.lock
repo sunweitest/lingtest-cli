@@ -467,7 +467,7 @@ wheels = [
 
 [[package]]
 name = "lingtest-cli"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -495,7 +495,7 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5,<7" },
     { name = "typer", specifier = ">=0.12,<1" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["ai", "dev"]
 
 [[package]]
 name = "markdown-it-py"

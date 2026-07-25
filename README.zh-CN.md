@@ -6,7 +6,7 @@ LingTest CLI 是一个本地优先的 API 测试工具。它可以把 OpenAPI �
 
 基础能力是确定性的，不依赖大模型或 API Key。生成结果使用普通 JSON 保存，用户可以在发出任何请求前审阅和修改。
 
-> 当前状态：`0.1.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
+> 当前状态：`0.2.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
 
 ## 已实现功能
 
@@ -20,6 +20,10 @@ LingTest CLI 是一个本地优先的 API 测试工具。它可以把 OpenAPI �
 - 输出详细 JSON 报告和可选 JUnit XML。
 - 使用适合 CI 的退出码。
 - 提供与 CLI 共用核心逻辑的基础 Python API。
+- 使用 LLM 检查 PRD 的歧义、矛盾、需求缺失和可测试性风险。
+- 生成经过结构校验的功能、边界、异常和 API 测试计划。
+- 根据执行证据诊断失败用例。
+- 支持 OpenAI、DeepSeek、Qwen 和自定义 OpenAI-compatible Provider。
 
 ## 环境要求
 
@@ -82,7 +86,31 @@ lingtest run cases.json --base-url https://api.example.com \
   -H "X-Tenant-ID:demo"
 ```
 
+使用 LLM 分析 PRD、生成测试计划并诊断失败：
+
+```powershell
+$env:OPENAI_API_KEY = "..."
+lingtest analyze requirements.md -o analysis.json
+lingtest ai-generate requirements.md -o ai-cases.json
+lingtest diagnose report.json -o diagnosis.json
+```
+
+也可以使用 `--provider deepseek`、`--provider qwen`，或者通过
+`--provider custom --base-url URL --model MODEL` 接入自定义兼容服务。
+
 ## 命令说明
+
+### `lingtest analyze`
+
+分析需求文档中的歧义、矛盾、缺失要求和可测试性风险。
+
+### `lingtest ai-generate`
+
+生成经过结构校验的功能、边界、异常和 API 测试计划。AI 用例是需要审阅的中间产物，不会被隐式执行。
+
+### `lingtest diagnose`
+
+读取 LingTest JSON 运行报告，根据执行证据对失败用例进行分类和诊断。
 
 ### `lingtest generate`
 
@@ -182,15 +210,29 @@ jobs:
 
 目标 API 必须能够被 runner 访问。可以在前置步骤启动服务，也可以连接已部署的测试环境。
 
+## AI Provider
+
+| Provider | 参数 | API Key 环境变量 | 默认模型 |
+| --- | --- | --- | --- |
+| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-4.1-mini` |
+| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| Qwen | `--provider qwen` | `DASHSCOPE_API_KEY` | `qwen-plus` |
+| 自定义 | `--provider custom` | `LINGTEST_API_KEY` | 使用 `--model` 指定 |
+
+Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失败时 LingTest 会自动要求模型修复一次。文档会发送给所选 Provider，处理保密需求前应检查其隐私和数据保留政策。
+
 ## 当前限制
 
 - 暂未实现 `$ref` 解析和高级 schema 组合。
 - 当前只断言 HTTP 状态码。
 - 用例按顺序执行。
 - 暂不自动处理 OpenAPI security schemes。
-- 0.1 版本不包含 AI 用例生成和失败分析。
+- 暂不支持 PDF 和 DOCX 文档提取。
+- AI 用例目前是审阅产物，尚不会自动转换为可执行 HTTP 用例。
 
 完整的产品边界、技术设计和路线图见 [product-design.html](product-design.html)。
+
+项目背景和产品理念见博客：[AI Agent 时代如何打造高质量软件](docs/blog/ai-testing-for-vibe-coding.zh-CN.md)。
 
 ## 本地开发
 
@@ -227,7 +269,7 @@ uv publish
 
 ## 安全说明
 
-只能对已获得授权的系统执行测试。0.1 版本不会把运行时 Header 写入报告，但生成的用例和报告仍应按项目数据进行保护。
+只能对已获得授权的系统执行测试。0.2 版本不会把运行时 Header 写入报告，但生成的用例和报告仍应按项目数据进行保护。
 
 ## 路线图
 
@@ -238,7 +280,7 @@ uv publish
 - 认证策略
 - 可控并发和重试
 - 静态 HTML 报告
-- 可选 AI Provider，用于扩展用例和分析失败
+- 把审核后的 AI API 用例转换为确定性可执行用例
 - pytest 导出和稳定插件 API
 
 ## License

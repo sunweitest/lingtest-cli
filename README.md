@@ -9,7 +9,7 @@ machine-readable reports for local development and CI.
 The deterministic core does not require an LLM or API key. Generated cases are
 plain JSON, so they can be reviewed and changed before any request is sent.
 
-> Status: `0.1.0` alpha. The file format and Python API may evolve before 1.0.
+> Status: `0.2.0` alpha. The file format and Python API may evolve before 1.0.
 
 ## Features
 
@@ -23,6 +23,10 @@ plain JSON, so they can be reviewed and changed before any request is sent.
 - Write detailed JSON reports and optional JUnit XML.
 - Return CI-friendly exit codes.
 - Use the same core through a small Python API.
+- Analyze PRDs for ambiguity, contradictions, missing requirements, and testability risks.
+- Generate validated functional, boundary, exception, and API test plans with an LLM.
+- Diagnose failed HTTP tests with evidence-grounded structured output.
+- Connect to OpenAI, DeepSeek, Qwen, or a custom OpenAI-compatible provider.
 
 ## Requirements
 
@@ -85,7 +89,39 @@ lingtest run cases.json --base-url https://api.example.com \
   -H "X-Tenant-ID:demo"
 ```
 
+Analyze requirements and generate an AI test plan:
+
+```bash
+export OPENAI_API_KEY="..."
+lingtest analyze requirements.md -o analysis.json
+lingtest ai-generate requirements.md -o ai-cases.json
+```
+
+Diagnose failed cases from a LingTest JSON report:
+
+```bash
+lingtest diagnose report.json -o diagnosis.json
+```
+
+Use `--provider deepseek`, `--provider qwen`, or a custom OpenAI-compatible
+endpoint with `--provider custom --base-url URL --model MODEL`.
+
 ## Commands
+
+### `lingtest analyze`
+
+Finds ambiguities, contradictions, missing requirements, and testability risks
+in `.txt`, `.md`, `.json`, `.yaml`, and `.yml` documents.
+
+### `lingtest ai-generate`
+
+Generates a validated plan containing functional, boundary, exception, and API
+test cases. AI cases are review artifacts and are never executed implicitly.
+
+### `lingtest diagnose`
+
+Reads a LingTest JSON run report and classifies failed cases using the supplied
+execution evidence.
 
 ### `lingtest generate`
 
@@ -192,16 +228,35 @@ jobs:
 The target API must be reachable from the runner. Start the service in an
 earlier step or point the command at a deployed test environment.
 
+## AI Providers
+
+| Provider | Option | API key environment variable | Default model |
+| --- | --- | --- | --- |
+| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-4.1-mini` |
+| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| Qwen | `--provider qwen` | `DASHSCOPE_API_KEY` | `qwen-plus` |
+| Custom | `--provider custom` | `LINGTEST_API_KEY` | Set with `--model` |
+
+Provider responses are parsed as JSON and validated with Pydantic. LingTest
+requests one correction when a response fails validation. Documents are sent
+to the configured provider; review its privacy policy before processing
+confidential requirements.
+
 ## Current Limitations
 
 - `$ref` resolution and advanced schema composition are not implemented yet.
 - Assertions currently compare the HTTP status only.
 - Cases run sequentially.
 - OpenAPI security schemes are not applied automatically.
-- AI case generation and failure analysis are not part of version 0.1.
+- PDF and DOCX document extraction are not implemented.
+- AI-generated cases are review artifacts and are not automatically converted
+  into executable HTTP cases.
 
 See [product-design.html](product-design.html) for implemented scope, design
 decisions, and the roadmap.
+
+The Chinese essay [AI Agent 时代如何打造高质量软件](docs/blog/ai-testing-for-vibe-coding.zh-CN.md)
+explains the Vibe Coding quality problem behind this project.
 
 ## Development
 
@@ -241,7 +296,7 @@ uv publish
 ## Security
 
 Only run generated cases against systems you are authorized to test. Runtime
-headers are not written to the report by version 0.1, but generated case files
+headers are not written to the report by version 0.2, but generated case files
 and reports should still be treated as project data.
 
 ## Roadmap
@@ -253,7 +308,7 @@ and reports should still be treated as project data.
 - Authentication strategies
 - Controlled concurrency and retries
 - Static HTML reports
-- Optional AI providers for case expansion and failure analysis
+- Conversion of reviewed AI API cases into deterministic executable cases
 - pytest export and a stable plugin API
 
 ## License
