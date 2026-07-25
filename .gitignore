@@ -1,0 +1,11 @@
+.venv/
+dist/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+lingtest-cases.json
+lingtest-report.json
+junit.xml
+
