@@ -2,14 +2,30 @@
 
 [简体中文](README.zh-CN.md) | English
 
-LingTest CLI is a local-first API testing tool that turns OpenAPI documents
-into editable test cases, runs them against an HTTP service, and writes
-machine-readable reports for local development and CI.
+LingTest CLI is a local-first AI testing agent for Vibe Coding workflows. It
+analyzes PRDs, generates validated test plans from requirements and OpenAPI,
+runs deterministic HTTP tests, and diagnoses failures with structured evidence.
 
 The deterministic core does not require an LLM or API key. Generated cases are
 plain JSON, so they can be reviewed and changed before any request is sent.
 
 > Status: `0.2.0` alpha. The file format and Python API may evolve before 1.0.
+
+## What's New in 0.2.0
+
+- Independent OpenAI-compatible provider layer with no FastAPI, Redis, database,
+  or worker dependency.
+- Built-in provider presets for OpenAI, DeepSeek, and Qwen, plus custom
+  `base_url` and model support.
+- `lingtest analyze` for PRD ambiguity, contradiction, missing requirement, and
+  testability-risk analysis.
+- `lingtest ai-generate` for functional, boundary, exception, and API test plans.
+- `lingtest diagnose` for evidence-grounded failure classification and advice.
+- Pydantic validation for every AI result, with one controlled correction retry.
+- Provider credentials read from environment variables and excluded from cases
+  and reports.
+- Expanded Chinese and English documentation, product design, and Vibe Coding
+  testing article.
 
 ## Features
 
@@ -36,24 +52,41 @@ plain JSON, so they can be reviewed and changed before any request is sent.
 
 ## Installation
 
-With `pipx`:
+### Standard `pip`
+
+Install into the active Python environment or virtual environment:
+
+```bash
+python -m pip install lingtest-cli
+lingtest --version
+```
+
+Use this when LingTest should share an existing project environment or when
+`pip` is your standard package manager.
+
+### Isolated CLI with `pipx` (recommended)
 
 ```bash
 pipx install lingtest-cli
 ```
 
-With `uv`:
+`pipx` creates a dedicated environment while making the `lingtest` command
+available globally. This avoids dependency conflicts with application projects.
+
+### Isolated CLI with `uv`
 
 ```bash
 uv tool install lingtest-cli
 ```
 
-For an isolated project environment:
+### Add to a UV project
 
 ```bash
 uv add --dev lingtest-cli
 uv run lingtest --help
 ```
+
+All installation methods provide the same `lingtest` command and Python API.
 
 ## Quick Start
 

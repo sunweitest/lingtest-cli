@@ -2,11 +2,22 @@
 
 简体中文 | [English](README.md)
 
-LingTest CLI 是一个本地优先的 API 测试工具。它可以把 OpenAPI 文档转换为可编辑的测试用例，对 HTTP 服务执行测试，并输出适合本地开发和 CI 平台使用的机器可读报告。
+LingTest CLI 是面向 Vibe Coding 工作流的本地优先 AI 测试 Agent。它可以分析 PRD，从需求和 OpenAPI 生成经过校验的测试计划，执行确定性 HTTP 测试，并根据执行证据诊断失败。
 
 基础能力是确定性的，不依赖大模型或 API Key。生成结果使用普通 JSON 保存，用户可以在发出任何请求前审阅和修改。
 
 > 当前状态：`0.2.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
+
+## 0.2.0 新功能
+
+- 新增独立 OpenAI-compatible Provider 层，不依赖 FastAPI、Redis、数据库或后台 Worker。
+- 内置 OpenAI、DeepSeek 和 Qwen 配置，并支持自定义 `base_url` 和模型。
+- 新增 `lingtest analyze`，检查 PRD 歧义、矛盾、需求缺失和可测试性风险。
+- 新增 `lingtest ai-generate`，生成功能、边界、异常和 API 测试计划。
+- 新增 `lingtest diagnose`，根据执行证据分类失败原因并给出建议。
+- 所有 AI 输出均通过 Pydantic 结构校验；失败时允许一次受控修复。
+- Provider 凭据只从环境变量读取，不写入用例和报告。
+- 完善中英文文档、产品设计和 Vibe Coding 测试文章。
 
 ## 已实现功能
 
@@ -33,24 +44,39 @@ LingTest CLI 是一个本地优先的 API 测试工具。它可以把 OpenAPI �
 
 ## 安装
 
-推荐使用 `pipx`：
+### 使用标准 `pip`
+
+安装到当前 Python 环境或已经激活的虚拟环境：
+
+```bash
+python -m pip install lingtest-cli
+lingtest --version
+```
+
+适合以 `pip` 作为标准包管理器，或者希望 LingTest 与当前项目共享虚拟环境的用户。
+
+### 使用 `pipx` 安装独立 CLI（推荐）
 
 ```bash
 pipx install lingtest-cli
 ```
 
-使用 `uv`：
+`pipx` 会创建独立虚拟环境，同时把 `lingtest` 命令加入 PATH，可以避免与业务项目依赖冲突。
+
+### 使用 `uv` 安装独立 CLI
 
 ```bash
 uv tool install lingtest-cli
 ```
 
-在项目的隔离环境中使用：
+### 添加到 UV 项目
 
 ```bash
 uv add --dev lingtest-cli
 uv run lingtest --help
 ```
+
+所有安装方式都会提供相同的 `lingtest` 命令和 Python API。
 
 ## 快速开始
 
