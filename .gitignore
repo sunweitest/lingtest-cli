@@ -8,4 +8,4 @@ __pycache__/
 lingtest-cases.json
 lingtest-report.json
 junit.xml
-
+debug/
