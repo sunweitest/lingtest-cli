@@ -1,50 +1,19 @@
+"""Provider registry and factory.
+
+SDK-specific implementations live in adapters.py. This module keeps the
+existing public imports stable for users of lingtest.ai.provider.
+"""
+
 import os
-from dataclasses import dataclass
-from typing import Any, Protocol
 
-import httpx
+from lingtest.ai.adapters import LLMProvider, OpenAICompatibleProvider, ProviderError
 
-
-class ProviderError(RuntimeError):
-    """Raised when an LLM provider request fails."""
-
-
-class LLMProvider(Protocol):
-    def complete(self, messages: list[dict[str, str]], *, json_mode: bool = True) -> str: ...
-
-
-@dataclass(slots=True)
-class OpenAICompatibleProvider:
-    api_key: str
-    model: str
-    base_url: str = "https://api.openai.com/v1"
-    timeout: float = 60.0
-    temperature: float = 0.2
-
-    def complete(self, messages: list[dict[str, str]], *, json_mode: bool = True) -> str:
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
-        try:
-            response = httpx.post(
-                f"{self.base_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
-        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-            raise ProviderError(f"LLM request failed: {exc}") from exc
-
+__all__ = [
+    "LLMProvider",
+    "OpenAICompatibleProvider",
+    "ProviderError",
+    "create_provider",
+]
 
 PROVIDERS = {
     "openai": ("https://api.openai.com/v1", "gpt-5.5", "OPENAI_API_KEY"),
@@ -65,6 +34,7 @@ def create_provider(
     api_key: str | None = None,
     timeout: float = 60.0,
 ) -> OpenAICompatibleProvider:
+    """Create an OpenAI-compatible adapter from a named or custom provider."""
     name = provider.lower()
     if name == "custom":
         if not base_url or not model:

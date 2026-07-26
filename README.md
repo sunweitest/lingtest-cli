@@ -298,10 +298,12 @@ earlier step or point the command at a deployed test environment.
 
 | Provider | Option | API key environment variable | Default model |
 | --- | --- | --- | --- |
-| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-4.1-mini` |
-| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-5.5` |
+| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-v4-pro` |
 | Qwen | `--provider qwen` | `DASHSCOPE_API_KEY` | `qwen-plus` |
 | Custom | `--provider custom` | `LINGTEST_API_KEY` | Set with `--model` |
+
+OpenAI-compatible providers use the official `openai` Python SDK behind the `LLMProvider` adapter.
 
 Provider responses are parsed as JSON and validated with Pydantic. LingTest
 requests one correction when a response fails validation. Documents are sent
@@ -314,9 +316,6 @@ confidential requirements.
 - Assertions currently compare the HTTP status only.
 - Cases run sequentially.
 - OpenAPI security schemes are not applied automatically.
-- PDF and DOCX document extraction are not implemented.
-- AI-generated cases are review artifacts and are not automatically converted
-  into executable HTTP cases.
 
 See [product-design.html](product-design.html) for implemented scope, design
 decisions, and the roadmap.

@@ -270,10 +270,12 @@ jobs:
 
 | Provider | 参数 | API Key 环境变量 | 默认模型 |
 | --- | --- | --- | --- |
-| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-4.1-mini` |
-| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-5.5` |
+| DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-v4-pro` |
 | Qwen | `--provider qwen` | `DASHSCOPE_API_KEY` | `qwen-plus` |
 | 自定义 | `--provider custom` | `LINGTEST_API_KEY` | 使用 `--model` 指定 |
+
+OpenAI-compatible Provider 通过 `LLMProvider` Adapter 使用官方 `openai` Python SDK。
 
 Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失败时 LingTest 会自动要求模型修复一次。文档会发送给所选 Provider，处理保密需求前应检查其隐私和数据保留政策。
 
@@ -283,8 +285,6 @@ Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失�
 - 当前只断言 HTTP 状态码。
 - 用例按顺序执行。
 - 暂不自动处理 OpenAPI security schemes。
-- 暂不支持 PDF 和 DOCX 文档提取。
-- AI 用例目前是审阅产物，尚不会自动转换为可执行 HTTP 用例。
 
 完整的产品边界、技术设计和路线图见 [product-design.html](product-design.html)。
 
