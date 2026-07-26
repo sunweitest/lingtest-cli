@@ -88,6 +88,9 @@ uv run lingtest --help
 
 All installation methods provide the same `lingtest` command and Python API.
 
+For the staged PRD-to-API workflow, review artifacts, generated scripts, observable reports,
+and agent Skill, see [Agentic testing workflow](docs/agentic-testing-workflow.zh-CN.md).
+
 ## Quick Start
 
 Generate cases:

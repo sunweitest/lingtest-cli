@@ -7,7 +7,7 @@ def test_version() -> None:
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == "0.2.0"
+    assert result.stdout.strip() == "0.3.0"
 
 
 def test_analyze_command_with_fake_provider(monkeypatch, tmp_path) -> None:
@@ -25,7 +25,7 @@ def test_analyze_command_with_fake_provider(monkeypatch, tmp_path) -> None:
               "testability_risks": []
             }"""
 
-    monkeypatch.setattr("lingtest.cli._create_provider", lambda *args: Provider())
+    monkeypatch.setattr("lingtest.cli_v3.create_provider", lambda *args, **kwargs: Provider())
     result = CliRunner().invoke(app, ["analyze", str(document), "-o", str(output)])
 
     assert result.exit_code == 0

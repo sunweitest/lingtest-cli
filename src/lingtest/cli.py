@@ -8,6 +8,7 @@ from lingtest import __version__
 from lingtest.ai.provider import ProviderError, create_provider
 from lingtest.ai.service import analyze_prd, diagnose_failures, generate_test_plan
 from lingtest.ai.structured import StructuredOutputError
+from lingtest.cli_v3 import register_v3_commands
 from lingtest.io import read_cases, read_report, write_cases, write_junit, write_report
 from lingtest.openapi import generate_cases
 from lingtest.runner import run_cases
@@ -129,9 +130,7 @@ def run_command(
     """Run generated test cases against an API."""
     try:
         headers = _parse_headers(header or [])
-        report = run_cases(
-            read_cases(cases_file), base_url, timeout=timeout, extra_headers=headers
-        )
+        report = run_cases(read_cases(cases_file), base_url, timeout=timeout, extra_headers=headers)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(2) from exc
@@ -166,6 +165,7 @@ def _fail(exc: Exception) -> None:
     typer.echo(f"Error: {exc}", err=True)
     raise typer.Exit(2) from exc
 
+register_v3_commands(app)
 
 if __name__ == "__main__":
     app()

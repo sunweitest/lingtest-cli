@@ -1,0 +1,4 @@
+interface:
+  display_name: "LingTest Vibe Testing"
+  short_description: "Run agentic PRD-to-API testing workflows"
+  default_prompt: "Use $lingtest-testing to turn this PRD and API document into reviewed test cases, executable tests, and an observable report."

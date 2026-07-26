@@ -23,6 +23,14 @@ class TestResult(BaseModel):
     expected_status: int
     actual_status: int | None = None
     error: str | None = None
+    method: str = ""
+    path: str = ""
+    request_headers: dict[str, str] = Field(default_factory=dict)
+    query: dict[str, Any] = Field(default_factory=dict)
+    request_body: Any | None = None
+    response_headers: dict[str, str] = Field(default_factory=dict)
+    response_body: str | None = None
+    logs: list[str] = Field(default_factory=list)
 
 
 class RunReport(BaseModel):
@@ -36,5 +44,8 @@ class RunReport(BaseModel):
 
     @property
     def failed(self) -> int:
-        return len(self.results) - self.passed
+        return sum(result.status == "failed" for result in self.results)
 
+    @property
+    def errors(self) -> int:
+        return sum(result.status == "error" for result in self.results)
