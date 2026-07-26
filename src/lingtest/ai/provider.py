@@ -47,8 +47,8 @@ class OpenAICompatibleProvider:
 
 
 PROVIDERS = {
-    "openai": ("https://api.openai.com/v1", "gpt-4.1-mini", "OPENAI_API_KEY"),
-    "deepseek": ("https://api.deepseek.com/v1", "deepseek-chat", "DEEPSEEK_API_KEY"),
+    "openai": ("https://api.openai.com/v1", "gpt-5.5", "OPENAI_API_KEY"),
+    "deepseek": ("https://api.deepseek.com/v1", "deepseek-v4-pro", "DEEPSEEK_API_KEY"),
     "qwen": (
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "qwen-plus",
