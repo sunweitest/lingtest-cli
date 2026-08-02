@@ -1,83 +1,88 @@
 ---
 name: lingtest-testing
-description: Drive LingTest CLI from PRD analysis through reviewed functional cases, AI-enriched API datasets, generated pytest scripts, authorized API execution, and observable HTML reports. Use when an agent needs to test a vibe-coded application from DOCX, Markdown, HTML, XLSX, Swagger, or OpenAPI inputs; generate or review test artifacts; run JSON/YAML API cases; or diagnose LingTest results.
+description: Drive LingTest CLI or its JSONL workflow from PRD analysis through reviewed functional cases, OpenAPI/Word API datasets, generated pytest scripts, authorized API execution, and observable HTML reports. Use when an agent needs to test a vibe-coded application, consume DOCX/Markdown/HTML/XLSX/Swagger/OpenAPI inputs, configure OpenAI/DeepSeek/Kimi/Qwen or a custom provider, reuse an authentication example, resume an approval-gated session, or validate LingTest artifacts.
 ---
 
 # LingTest Testing
 
-Use LingTest as a staged test pipeline. Preserve reviewable artifacts between reasoning and
-execution so a human or another agent can check assumptions before requests reach a target API.
+Use LingTest as an artifact-first pipeline. Prefer non-interactive commands and JSONL events; use
+`lingtest tui` only for a human operating a terminal.
 
 ## Prepare
 
-Run commands from the LingTest project root:
-
 ```powershell
-uv sync --extra dev
-uv run lingtest --version
+uv sync --extra dev --extra tui
+uv run lingtest providers
 ```
 
-Never store API keys, authorization headers, cookies, or passwords in generated artifacts. Run
-tests only against a base URL the user is authorized to test.
+Keep keys in environment variables. Never put API keys, tokens, cookies, passwords, or signing
+secrets in case files, provider JSON, logs, or prompts. Test only targets the user is authorized
+to exercise.
 
-## Execute the workflow
+## Execute the staged workflow
 
-1. Analyze the PRD before generating cases:
+1. Analyze the PRD and generate a reviewable functional plan:
 
    ```powershell
    uv run lingtest analyze PRD.docx -o analysis.json
+   uv run lingtest ai-generate PRD.docx -o functional-cases.md
    ```
 
-2. Generate functional cases in a human-reviewable format:
-
-   ```powershell
-   uv run lingtest ai-generate PRD.docx -o functional-cases.html
-   ```
-
-   Use `.md` for Git review, `.xlsx` for spreadsheet review, `.html` for browser review, or
-   `.json`/`.yaml` for machine review. Review requirements traceability, invented behavior,
-   missing boundaries, and destructive actions before continuing.
-
-3. Combine the reviewed cases with the interface document:
+2. After review, combine functional intent with the interface document:
 
    ```powershell
    uv run lingtest generate openapi.yaml --strategy auto `
-     --functional-cases functional-cases.html -o api-cases.yaml
+     --functional-cases functional-cases.md -o api-cases.yaml
    ```
 
-   Select `deterministic` for exact OpenAPI conversion without an LLM, `ai` for document-only
-   generation, and `auto` for deterministic OpenAPI seeds plus AI enrichment.
+   Use `deterministic` for exact OpenAPI conversion without an LLM, `ai` for unstructured Word
+   input, and `auto` for OpenAPI seeds plus AI boundary and exception scenarios.
 
-4. Generate a portable pytest script when the consumer needs source code:
+3. If authentication is non-trivial, ask for a minimal working Python example. Analyze it
+   statically and create an independent reviewable plan by default:
 
    ```powershell
-   uv run lingtest script api-cases.yaml -o test_api.py
+   uv run lingtest script api-cases.yaml --auth-example examples/auth.py `
+     --auth-plan-mode standalone -o tests/test_api.py
    ```
 
-5. Run the reviewed dataset and retain machine-readable evidence:
+   For HMAC/RSA/business signatures, use an explicitly approved project hook such as
+   `--auth-hook tests/auth_hook.py:sign_request`. Never invent or copy the signing algorithm.
+
+4. Run only after checking host, HTTP methods, payloads, expected statuses, authentication source,
+   and required environment variable names:
 
    ```powershell
    uv run lingtest run api-cases.yaml --base-url http://localhost:8000 `
      -o report.html --json-output report.json --junit junit.xml
    ```
 
-6. Diagnose failures with the JSON report:
+   HTML output prints its absolute path and does not open a browser unless `--open-browser` is
+   explicit.
 
-   ```powershell
-   uv run lingtest diagnose report.json -o diagnosis.json
-   ```
+## Drive the complete workflow as an agent
 
-## Apply gates
+Create a JSON object containing `document_path`, `interface_document`, output paths, provider,
+strategy, trust mode, and optional `target_base_url`, then run:
 
-- Stop if PRD analysis exposes critical ambiguity that changes expected behavior.
-- Do not run an AI-generated dataset before checking method, path, payload, expected status, and
-  potentially destructive endpoints.
-- Treat exit code `1` as test failure and exit code `2` as invalid input, configuration, or
-  provider failure.
-- Inspect the HTML request, response, timing, and logs for failed cases. Runtime sensitive
-  headers are redacted, but still avoid placing secrets in case files.
-- Preserve the functional cases, API dataset, HTML report, and JSON report as delivery evidence.
+```powershell
+uv run lingtest workflow workflow.json --events jsonl --result result.json
+```
 
-Read [references/workflow.md](references/workflow.md) for command choices and provider setup.
-Read [references/artifact-contracts.md](references/artifact-contracts.md) when another tool or
-agent must consume or validate LingTest artifacts.
+Exit code `3` means the graph stopped at a required review. Preserve the session ID from events,
+review the artifact, then explicitly resume:
+
+```powershell
+uv run lingtest workflow --resume SESSION_ID --decision approve --events jsonl
+```
+
+Use `guarded` unless the user explicitly authorizes `trusted-project` or `full`. A model must never
+raise its own trust level. Exit code `1` means rejected, failed, or failing tests; exit code `2`
+means invalid input/configuration/provider; exit code `3` means approval is required.
+
+Use `lingtest session list`, `session delete`, and `session prune --dry-run` for internal history.
+Session cleanup never deletes user output artifacts.
+
+Read [references/workflow.md](references/workflow.md) for provider JSON, workflow configuration,
+and failure handling. Read [references/artifact-contracts.md](references/artifact-contracts.md)
+when another tool must consume or validate LingTest artifacts.

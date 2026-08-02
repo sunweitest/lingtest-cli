@@ -32,4 +32,3 @@ paths:
     assert cases[0].path == "/users/42"
     assert cases[0].query == {"verbose": True}
     assert cases[0].expected_status == 200
-

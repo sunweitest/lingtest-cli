@@ -7,7 +7,7 @@ def test_version() -> None:
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == "0.3.0"
+    assert result.stdout.strip() == "0.4.0"
 
 
 def test_analyze_command_with_fake_provider(monkeypatch, tmp_path) -> None:

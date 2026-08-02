@@ -16,4 +16,4 @@ __all__ = [
     "generate_cases",
     "run_cases",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"

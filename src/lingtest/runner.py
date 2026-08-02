@@ -45,4 +45,3 @@ def run_cases(
                 )
             )
     return RunReport(base_url=base_url, results=results)
-

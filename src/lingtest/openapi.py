@@ -105,4 +105,3 @@ def _expected_status(responses: dict[str, Any], method: str) -> int:
 
 def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-

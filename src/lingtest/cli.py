@@ -165,6 +165,7 @@ def _fail(exc: Exception) -> None:
     typer.echo(f"Error: {exc}", err=True)
     raise typer.Exit(2) from exc
 
+
 register_v3_commands(app)
 
 if __name__ == "__main__":

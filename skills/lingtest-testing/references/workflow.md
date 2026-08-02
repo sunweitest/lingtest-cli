@@ -2,79 +2,91 @@
 
 ## Contents
 
-- Input and output selection
+- Inputs and outputs
 - Provider configuration
-- Strategy selection
-- Typical agent runs
-- Failure handling
+- Authentication
+- Agent workflow configuration
+- Sessions and failure handling
 
-## Input and output selection
+## Inputs and outputs
 
 PRD and review inputs support `.docx`, `.txt`, `.md`, `.html`, `.json`, `.yaml`, `.yml`, and
-`.xlsx`. Legacy `.doc` must be converted to `.docx`.
-
-Functional case output is selected by extension:
-
-- `.md`: review in Git and pull requests.
-- `.html`: self-contained browser review.
-- `.xlsx`: business and QA spreadsheet review.
-- `.json` or `.yaml`: machine review and pipeline exchange.
-
-Executable API datasets support `.json`, `.yaml`, and `.yml`. Generated source uses `.py`.
-Run reports support `.html`, `.json`, and optional JUnit XML.
+`.xlsx`. Convert legacy `.doc` to `.docx`. Functional plans use `.md`, `.html`, `.xlsx`, `.json`,
+or `.yaml`; executable API datasets use `.json`, `.yaml`, or `.yml`; generated source uses `.py`.
+Reports use `.html`, `.json`, and optional JUnit XML.
 
 ## Provider configuration
 
-Configure one key in the current process without printing it:
+Built-ins are `openai`, `deepseek`, `kimi`, and `qwen`. Inspect key availability without revealing
+values:
 
 ```powershell
-$env:OPENAI_API_KEY = "..."
-$env:DEEPSEEK_API_KEY = "..."
-$env:DASHSCOPE_API_KEY = "..."
-$env:LINGTEST_API_KEY = "..."
+uv run lingtest providers
 ```
 
-Use `--provider openai|deepseek|qwen`. For an OpenAI-compatible custom service, supply all three:
+Keys come from `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, or
+`DASHSCOPE_API_KEY`. A project may add `.lingtest/providers.json`:
 
-```powershell
-uv run lingtest ai-generate PRD.docx --provider custom `
-  --model local-model --base-url http://localhost:11434/v1 -o functional-cases.md
+```json
+{
+  "default_provider": "company_gateway",
+  "providers": {
+    "company_gateway": {
+      "type": "openai_compatible",
+      "model_name": "company-test-model",
+      "url": "https://llm.example.com/v1",
+      "api_key_env": "COMPANY_LLM_API_KEY"
+    }
+  }
+}
 ```
 
-## Strategy selection
+The JSON stores only the environment variable name, never the key. Override discovery with
+`--provider-config PATH` or `LINGTEST_PROVIDER_CONFIG`.
 
-| Strategy | Use it when | LLM |
-| --- | --- | --- |
-| `deterministic` | Input is valid OpenAPI and exact baseline coverage is sufficient | No |
-| `ai` | Input is Word or an unstructured interface document | Yes |
-| `auto` | Input is OpenAPI and semantic boundary/exception enrichment is wanted | Yes |
+## Authentication
 
-Prefer `auto` after functional cases have been reviewed. Prefer `deterministic` in offline,
-reproducible, or high-assurance pipelines.
+Use `--auth-example PATH.py` for a working bearer or cookie example. LingTest parses the AST
+without importing or executing the file and replaces literal credentials with environment
+placeholders. Choose `--auth-plan-mode standalone` (default) for `lingtest-auth-plan.yaml` or
+`embedded` for a single JSON/YAML case bundle.
 
-## Typical agent runs
+A signing hook uses `PATH.py:FUNCTION`. The path must remain inside the project, the function is
+validated statically, and its SHA-256 digest is checked before explicitly authorized execution.
+Treat the hook as trusted user code, not a sandbox.
 
-Fast review artifact:
+## Agent workflow configuration
 
-```powershell
-uv run lingtest ai-generate PRD.docx -o functional-cases.md
+Example `workflow.json`:
+
+```json
+{
+  "project_root": ".",
+  "document_path": "PRD.docx",
+  "interface_document": "openapi.yaml",
+  "functional_output": "artifacts/functional-cases.md",
+  "api_cases_output": "artifacts/api-cases.yaml",
+  "script_output": "tests/test_api_generated.py",
+  "report_output": "artifacts/report.html",
+  "strategy": "auto",
+  "provider": "deepseek",
+  "trust_mode": "guarded",
+  "target_base_url": "http://localhost:8000"
+}
 ```
 
-Full delivery evidence:
+Use `--events jsonl` for the stable LingTest event schema rather than parsing TUI output. Review
+artifacts whenever the workflow exits with code `3`, then resume the same checkpoint with an
+explicit approve or reject decision.
 
-```powershell
-uv run lingtest generate openapi.yaml --strategy auto `
-  --functional-cases functional-cases.md -o api-cases.yaml
-uv run lingtest script api-cases.yaml -o test_api.py
-uv run lingtest run api-cases.yaml --base-url $env:LINGTEST_BASE_URL `
-  -o report.html --json-output report.json --junit junit.xml
-```
+## Sessions and failure handling
 
-## Failure handling
+Internal SQLite history defaults to 30 days. `retention=forever` disables automatic expiry and
+`retention=0` removes eligible internal history immediately. Deleting or pruning a session removes
+LingTest indexes and LangGraph checkpoints but never user artifacts.
 
-- Provider error: verify the matching environment variable and endpoint.
-- Schema validation error: retry once, then inspect whether the source lacks method/path/status.
-- HTTP failures: open the HTML report and inspect the case detail.
-- Connection errors: verify the target service is running and reachable from the agent.
-- Duplicate or hallucinated API paths: regenerate with `auto`, keeping deterministic OpenAPI
-  seeds, or fall back to `deterministic`.
+- Provider error: verify the selected profile, endpoint, model, and matching environment variable.
+- Schema error: inspect whether the source lacks concrete method, path, or expected status.
+- Hallucinated API paths: preserve deterministic OpenAPI seeds or use `deterministic` mode.
+- HTTP failure: inspect the expandable HTML case log; sensitive request data is redacted.
+- Approval exit: review the named artifact and resume the same session, never restart blindly.

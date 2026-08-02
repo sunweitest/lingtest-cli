@@ -6,8 +6,18 @@ LingTest CLI 是面向 Vibe Coding 工作流的本地优先 AI 测试 Agent。�
 
 基础能力是确定性的，不依赖大模型或 API Key。生成结果使用普通 JSON 保存，用户可以在发出任何请求前审阅和修改。
 
-> 当前状态：`0.2.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
+> 当前状态：`0.4.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
 
+## 0.4.0 新功能
+
+- 完整的 Hermes 风格 `lingtest tui`，包含响应式工作流、事件时间线和产物面板。
+- 可恢复的 LangGraph 工作流、稳定 JSONL 事件、显式审批门禁和 SQLite 会话。
+- 内置 OpenAI、DeepSeek、Kimi、Qwen，并支持不保存密钥的 JSON Provider 配置。
+- DOCX 加载、Python 鉴权示例静态分析、可审查 `AuthPlan`、bearer/cookie 和显式授权签名 hook。
+- `deterministic`、`ai`、`auto` 三种接口生成策略，以及 pytest、JSON/YAML、现代 HTML 报告。
+
+开发安装执行 `uv sync --extra dev --extra tui`，人类用户运行 `uv run lingtest tui`；Agent
+和 CI 使用 `lingtest workflow ... --events jsonl`。
 ## 0.2.0 新功能
 
 - 新增独立 OpenAI-compatible Provider 层，不依赖 FastAPI、Redis、数据库或后台 Worker。
@@ -290,6 +300,8 @@ Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失�
 
 项目背景和产品理念见博客：[AI Agent 时代如何打造高质量软件](docs/blog/ai-testing-for-vibe-coding.zh-CN.md)。
 
+UV 启动、开发调试和全新 dist 发布步骤见 [发布与开发教程](docs/LingTest发布与开发教程.html)。
+
 ## 本地开发
 
 ```bash
@@ -315,7 +327,7 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 ## 发布流程
 
 1. 同时更新 `pyproject.toml` 和 `src/lingtest/__init__.py` 中的版本。
-2. 运行测试、Ruff、`uv build` 和 `twine check`。
+2. 运行测试、Ruff、`uv build --clear` 和 `twine check`。
 3. 提交发行版本，并创建同版本 Git tag。
 4. 配置 `UV_PUBLISH_TOKEN` 后发布：
 

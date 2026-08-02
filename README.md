@@ -9,8 +9,20 @@ runs deterministic HTTP tests, and diagnoses failures with structured evidence.
 The deterministic core does not require an LLM or API key. Generated cases are
 plain JSON, so they can be reviewed and changed before any request is sent.
 
-> Status: `0.2.0` alpha. The file format and Python API may evolve before 1.0.
+> Status: `0.4.0` alpha. The file format and Python API may evolve before 1.0.
 
+## What's New in 0.4.0
+
+- Full-screen Hermes-style `lingtest tui` with responsive workflow, timeline, and artifact panels.
+- Resumable LangGraph workflow, stable JSONL events, explicit approval gates, and SQLite sessions.
+- Built-in OpenAI, DeepSeek, Kimi, and Qwen profiles plus secret-free JSON provider config.
+- Static DOCX/Python authentication analysis, reviewable `AuthPlan`, bearer/cookie support, and
+  explicitly approved project-local signing hooks.
+- Deterministic, AI, and hybrid OpenAPI strategies; generated pytest, JSON/YAML datasets, and
+  observable HTML reports whose browser opening is opt-in.
+
+Install all developer and TUI dependencies with `uv sync --extra dev --extra tui`, then run
+`uv run lingtest tui`. Agents and CI should use `lingtest workflow ... --events jsonl`.
 ## What's New in 0.2.0
 
 - Independent OpenAI-compatible provider layer with no FastAPI, Redis, database,
@@ -300,6 +312,7 @@ earlier step or point the command at a deployed test environment.
 | --- | --- | --- | --- |
 | OpenAI | `--provider openai` | `OPENAI_API_KEY` | `gpt-5.5` |
 | DeepSeek | `--provider deepseek` | `DEEPSEEK_API_KEY` | `deepseek-v4-pro` |
+| Kimi | `--provider kimi` | `KIMI_API_KEY` | `kimi-k3` |
 | Qwen | `--provider qwen` | `DASHSCOPE_API_KEY` | `qwen-plus` |
 | Custom | `--provider custom` | `LINGTEST_API_KEY` | Set with `--model` |
 
@@ -323,12 +336,14 @@ decisions, and the roadmap.
 The Chinese essay [AI Agent 时代如何打造高质量软件](docs/blog/ai-testing-for-vibe-coding.zh-CN.md)
 explains the Vibe Coding quality problem behind this project.
 
+For UV startup, debugging, and clean PyPI release steps, open the [publishing and development tutorial](docs/LingTest发布与开发教程.html).
+
 ## Development
 
 Clone the repository and install all development dependencies:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra tui
 uv run pytest
 uv run ruff check .
 ```
@@ -336,7 +351,7 @@ uv run ruff check .
 Build and validate distributions:
 
 ```bash
-uv build
+uv build --clear
 uv run twine check dist/*
 ```
 
@@ -350,7 +365,7 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 ## Release
 
 1. Update the version in `pyproject.toml` and `src/lingtest/__init__.py`.
-2. Run tests, Ruff, `uv build`, and `twine check`.
+2. Run tests, Ruff, `uv build --clear`, and `twine check`.
 3. Commit the release and create a matching Git tag.
 4. Publish with `UV_PUBLISH_TOKEN`:
 
