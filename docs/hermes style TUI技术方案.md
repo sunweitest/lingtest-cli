@@ -282,6 +282,92 @@ flowchart TD
 - **asyncio + typed event queue**：解耦模型流、工具进度、日志和 UI 渲染。
 - **SQLite**：保存会话、审批、产物引用和可恢复检查点。
 - **OpenAI SDK Provider Adapter**：在现有抽象上增加流式事件能力，其他兼容供应商保持同一契约。
+### 8.2 多 LLM Provider 与 JSON 配置
+
+LingTest 同时提供内置预设和用户自定义配置。内置预设至少包括 OpenAI、DeepSeek、Kimi、Qwen；预设提供默认 API 地址、默认模型和 API Key 环境变量名，用户仍可覆盖模型与地址。
+
+当前代码已经内置 OpenAI、DeepSeek、Qwen，并支持通过 `custom + --base-url + --model` 临时配置。后续需要补充 Kimi，以及持久化 JSON 配置加载能力。
+
+推荐项目级配置文件 `.lingtest/providers.json`：
+
+```json
+{
+  "default_provider": "deepseek",
+  "providers": {
+    "openai": {
+      "type": "openai_compatible",
+      "model_name": "your-openai-model",
+      "url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY"
+    },
+    "deepseek": {
+      "type": "openai_compatible",
+      "model_name": "your-deepseek-model",
+      "url": "https://api.deepseek.com/v1",
+      "api_key_env": "DEEPSEEK_API_KEY"
+    },
+    "kimi": {
+      "type": "openai_compatible",
+      "model_name": "your-kimi-model",
+      "url": "https://your-kimi-compatible-endpoint/v1",
+      "api_key_env": "KIMI_API_KEY"
+    },
+    "qwen": {
+      "type": "openai_compatible",
+      "model_name": "your-qwen-model",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "api_key_env": "DASHSCOPE_API_KEY"
+    },
+    "company_gateway": {
+      "type": "openai_compatible",
+      "model_name": "company-test-model",
+      "url": "https://llm.example.com/v1",
+      "api_key_env": "COMPANY_LLM_API_KEY"
+    }
+  }
+}
+```
+
+配置文件只保存环境变量名称 `api_key_env`，绝不保存真实 API Key。启动时根据选中的 Provider 自动读取环境变量，例如：
+
+```powershell
+$env:OPENAI_API_KEY = "..."
+$env:DEEPSEEK_API_KEY = "..."
+$env:KIMI_API_KEY = "..."
+$env:DASHSCOPE_API_KEY = "..."
+```
+
+建议的配置查找顺序：
+
+1. CLI 显式传入的 `--provider-config <path>`；
+2. `LINGTEST_PROVIDER_CONFIG` 指向的文件；
+3. 当前项目 `.lingtest/providers.json`；
+4. 用户级 LingTest 配置目录中的 `providers.json`；
+5. 程序内置 Provider 预设。
+
+同一字段的优先级为：CLI 参数 > 环境变量 > 项目配置 > 用户配置 > 内置默认值。API Key 的读取顺序为显式 `api_key_env`、Provider 的标准环境变量、`LINGTEST_API_KEY`。不建议通过 CLI 明文参数传递密钥，以免进入 shell history。
+
+CLI/TUI 交互示例：
+
+```powershell
+uv run lingtest ai-generate prd.docx --provider deepseek
+uv run lingtest ai-generate prd.docx --provider kimi --model your-kimi-model
+uv run lingtest ai-generate prd.docx --provider company_gateway `
+  --provider-config .lingtest/providers.json
+```
+
+```text
+/providers
+/provider deepseek
+/model your-deepseek-model
+/provider-config .lingtest/providers.json
+```
+
+`/providers` 显示 Provider 名称、模型、地址来源和 API Key 是否已配置，但只显示环境变量名与 `configured/missing` 状态，不显示密钥。切换 Provider 后先执行轻量连接检查，再用于正式生成。
+
+配置通过 Pydantic 严格校验：Provider 名称不可重复，`model_name`、`url`、`api_key_env` 必填，未知字段默认报错；远程地址默认要求 HTTPS，仅对明确的 localhost 开发地址放宽。错误信息必须指出配置文件路径及具体字段。
+
+所有 OpenAI-compatible 服务继续复用 OpenAI SDK Adapter，并通过 `base_url` 切换端点。若某供应商与 OpenAI 协议存在实质差异，则新增专用 Adapter，不能把供应商差异泄漏到工作流层。首版不自动在多个 Provider 之间故障转移，避免在用户不知情时改变成本、数据边界或模型行为；后续可提供显式、可审批的 fallback 配置。
 
 TUI 依赖建议放入 optional extra：
 
@@ -296,7 +382,7 @@ tui = ["textual", "prompt-toolkit"]
 uv sync --extra tui
 ```
 
-### 8.2 Provider 接口演进
+### 8.3 Provider 接口演进
 
 保留现有同步 `complete()` 以避免破坏调用方，新增异步流接口：
 
@@ -399,8 +485,10 @@ uv run lingtest tui --events jsonl
 ```text
 /help
 /project <path>
+/providers
 /provider <name>
 /model <name>
+/provider-config <providers.json>
 /analyze <prd.docx>
 /generate-functional [md|html|xlsx]
 /generate-api <openapi.yaml>
@@ -489,6 +577,7 @@ src/lingtest/
 
 - 抽取 Controller、统一事件和显式状态机；
 - 为 Provider Adapter 增加 `astream()`；
+- 增加 Kimi 内置预设、JSON Provider 配置、环境变量自动发现与配置校验；
 - 实现 Python AST 鉴权示例解析器与 `AuthPlan`；
 - 为 `script` 增加 `--auth-example`；
 - 增加 secret 检测、脱敏和鉴权计划审查。
@@ -526,6 +615,8 @@ src/lingtest/
 - 鉴权示例文件在测试中证明从未被执行或 import。
 - 能从典型 bearer token 和 cookie session 示例生成正确 `AuthPlan` 与 fixture。
 - 明文 secret 不出现在生成脚本、缓存、终端日志和 HTML 报告中。
+- 可以在 OpenAI、DeepSeek、Kimi、Qwen 预设及 JSON 自定义 Provider 之间切换。
+- JSON 配置不保存 API Key，并能按 `api_key_env` 自动读取对应环境变量。
 - 脚本执行前可以看到 host、危险方法、鉴权来源和环境变量清单。
 - Agent 可只依靠 JSONL 事件和退出码完成同一工作流。
 
