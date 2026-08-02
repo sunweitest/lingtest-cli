@@ -44,7 +44,7 @@ TUI 是现有 CLI 的增量入口，不替代可组合、可自动化的非交�
 4. **命令优先**：TUI 调用领域服务，而不是复制一套只能由界面使用的业务逻辑。
 5. **渐进增强**：没有 TUI 可选依赖时，现有 CLI 仍能完整工作。
 
-## 4. 三种使用入口
+## 4. 两种使用入口
 
 ### 4.1 非交互 CLI
 
@@ -59,21 +59,13 @@ uv run lingtest run api-cases.yaml --report report.html
 
 后续命令只增加兼容选项，不改变现有默认含义。
 
-### 4.2 轻量交互模式
-
-```powershell
-uv run lingtest chat
-```
-
-面向只需要连续对话和斜杠命令的用户。它保留普通终端滚动区，支持历史记录、多行编辑、自动补全和流式工具日志。
-
-### 4.3 全屏 TUI
+### 4.2 全屏 TUI
 
 ```powershell
 uv run lingtest tui
 ```
 
-面向完整工作流，提供任务区、审查区、运行日志、产物和报告入口。
+面向人类用户的完整工作流，提供任务区、审查区、运行日志、产物和报告入口。首版不再单独实现 `lingtest chat`：轻量 REPL 与完整 TUI 的输入、历史、补全和流式能力高度重叠，维护两个交互入口会增加测试和文档成本。普通 CLI 继续服务 Agent/CI，完整 TUI 服务人类用户。
 
 ## 5. 界面布局
 
@@ -254,12 +246,51 @@ lingtest-auth-plan.yaml         # 可审查、可版本管理的鉴权计划
 
 当用户明确指定单文件输出时，可把 fixture 合并到脚本中以保持当前行为兼容。
 
+### 7.7 鉴权计划的保存方式
+
+用户可以选择两种格式：
+
+- `standalone`：生成独立的 `lingtest-auth-plan.yaml`，便于复用、单独审查和限制访问权限；
+- `embedded`：把 `auth` 节点嵌入接口用例 YAML，便于复制、归档和单文件运行。
+
+非交互 CLI 通过 `--auth-plan-mode standalone|embedded` 选择，默认使用 `standalone`；TUI 在首次生成脚本时询问，并记住当前项目选择。无论采用哪种方式，文件中都只保存环境变量名，不保存 token、cookie、密码或签名密钥。
+
+### 7.8 签名类鉴权的受控 Hook
+
+“受控 hook”不是让模型复制 HMAC、RSA、国密、时间戳或业务签名算法，而是让用户维护一段经过项目验证的可信 Python 函数，LingTest 只按固定接口调用它：
+
+```python
+import httpx
+
+
+def sign_request(request: httpx.Request) -> None:
+    """从环境变量读取密钥，并原地补充签名 header/query。"""
+    ...
+```
+
+调用示例：
+
+```powershell
+uv run lingtest script api-cases.yaml `
+  --auth-hook tests/auth_hook.py:sign_request `
+  -o tests/test_api_generated.py
+```
+
+“受控”具体指：
+
+- hook 路径和函数名由用户显式指定，不由模型自行寻找或下载；
+- 文档分析和脚本生成阶段只检查函数签名，不执行 hook；
+- 仅在用户批准运行测试后调用，并在运行记录中保存文件路径与内容摘要；
+- 生成器只生成调用代码，不复制、改写或把签名实现发送给模型；
+- hook 从环境变量读取 secret，日志仍经过统一脱敏。
+
+需要明确：Python hook 在测试执行阶段本质上是用户授权运行的任意代码，首版不是安全沙箱。因此只应加载项目内经过审查的文件；“受控”表示固定契约、显式授权和可审计，不表示不可信代码可以安全执行。
+
 ## 8. 技术架构
 
 ```mermaid
 flowchart TD
     A["Typer CLI"] --> D["Application Controller"]
-    B["prompt_toolkit Chat"] --> D
     C["Textual TUI"] --> D
     D --> E["Workflow State Machine"]
     D --> F["Tool Registry / Domain Services"]
@@ -269,7 +300,6 @@ flowchart TD
     F --> J["Artifact + Script Generator"]
     F --> K["Runner + Reports"]
     F --> L["Auth Example Parser"]
-    G --> B
     G --> C
     G --> M["JSON Event Stream for Agent/CI"]
 ```
@@ -278,7 +308,7 @@ flowchart TD
 
 - **Typer**：继续负责稳定的非交互命令入口。
 - **Textual + Rich**：实现全屏 TUI、响应式布局、日志窗口、数据表和键盘操作。
-- **prompt_toolkit**：实现轻量 `chat` 的多行编辑、历史记录和补全。
+- **Textual 输入组件**：统一实现多行编辑、历史记录、路径及斜杠命令补全。
 - **asyncio + typed event queue**：解耦模型流、工具进度、日志和 UI 渲染。
 - **SQLite**：保存会话、审批、产物引用和可恢复检查点。
 - **OpenAI SDK Provider Adapter**：在现有抽象上增加流式事件能力，其他兼容供应商保持同一契约。
@@ -373,7 +403,7 @@ TUI 依赖建议放入 optional extra：
 
 ```toml
 [project.optional-dependencies]
-tui = ["textual", "prompt-toolkit"]
+tui = ["textual"]
 ```
 
 安装方式：
@@ -516,9 +546,34 @@ uv run lingtest tui --events jsonl
 - 会话只持久化状态、脱敏消息、产物路径和摘要；真实 secret 保持在进程内或从环境变量重新读取。
 - 恢复运行必须重新确认目标环境和危险请求，不复用已经过期的 token。
 
+### 14.1 SQLite 会话保留策略
+
+保留时间主要影响三件事：隐私暴露窗口、磁盘占用，以及用户能否恢复旧任务和排查历史失败。SQLite 本身占用通常不大，真正可能膨胀的是详细运行日志；保留过短会失去恢复和审计能力，永久保留则会积累项目路径、提示词、脱敏日志和模型使用记录。
+
+建议默认策略：
+
+- 会话、检查点、审批和内部运行日志在最后活动 **30 天**后清理；
+- 用户明确输出的测试用例、脚本、YAML、HTML 报告不由清理器自动删除；
+- `retention_days: 0` 表示不持久化历史，`retention: forever` 表示永久保留；
+- 清理任务每日最多执行一次，并支持 `lingtest session prune --dry-run` 预览；
+- TUI 提供 `/sessions`、`/session delete <id>` 和 `/settings retention <days|forever>`；
+- 删除会话时清理数据库记录和 LingTest 管理的内部缓存，不删除用户工作目录中的产物。
+
+项目涉及敏感 PRD 或受监管数据时，可以设为 0 或更短；强调长期追踪和失败复盘的团队可设为 90 天或永久保留。
+
 ## 15. 审批与安全策略
 
-以下动作默认要求审批：
+用户可以选择三种信任级别：
+
+- `guarded`（默认）：脚本写入、新 host、危险 HTTP 方法、疑似生产环境和自动修复重跑均需审批；
+- `trusted-project`：信任当前项目内的文件写入和已加入 allowlist 的测试 host，生产环境及越界目标仍需审批；
+- `full`：完全信任当前会话，跳过所有交互审批，适合用户明确授权的本地自动化或隔离 CI。
+
+CLI 使用 `--trust-mode guarded|trusted-project|full`，TUI 使用 `/trust <mode>`。`full` 模式必须由用户显式选择，界面持续显示醒目标识，不能由模型自行升级权限；如需持久化，只能写入受信任项目配置，不能静默变成全局默认。
+
+完全信任模式跳过的是“是否执行”的确认，不关闭以下安全底线：secret 脱敏、鉴权示例在分析阶段不执行、审计事件记录，以及配置的 host/工作区范围。CI 使用 `full` 时仍建议显式提供 `--allow-host`，使授权范围可复核。
+
+以下动作在 `guarded` 模式下默认要求审批：
 
 1. 用 AI 结果覆盖已存在的产物；
 2. 生成或修改可执行 Python；
@@ -528,6 +583,8 @@ uv run lingtest tui --events jsonl
 6. 在失败诊断后自动修改并重跑脚本。
 
 运行前展示 host、请求方法统计、用例数、并发数、超时、鉴权来源和敏感变量名称。日志统一经过 header、cookie、query、body 脱敏器，再进入 TUI 和 HTML 报告。
+
+HTML 报告生成后默认只打印绝对路径；TUI 将路径渲染为可点击入口，但不自动启动浏览器。只有用户显式执行 `/report open` 或传入 `--open-browser` 时才打开浏览器，避免 CI、远程终端或无图形环境意外启动 GUI。
 
 ## 16. Agent 与 CI 兼容
 
@@ -557,9 +614,6 @@ src/lingtest/
 │   ├── example_parser.py
 │   ├── models.py
 │   └── generator.py
-├── chat/
-│   ├── repl.py
-│   └── completion.py
 ├── tui/
 │   ├── app.py
 │   ├── screens/
@@ -582,17 +636,17 @@ src/lingtest/
 - 为 `script` 增加 `--auth-example`；
 - 增加 secret 检测、脱敏和鉴权计划审查。
 
-### P1：轻量 Chat
+### P1：完整 Textual TUI
 
-- 实现 `lingtest chat`；
+- 直接实现 `lingtest tui` 和响应式三栏布局；
 - 支持多行编辑、历史、路径和斜杠命令补全；
-- 支持流式模型输出、工具卡片文本版和 Ctrl+C 中断。
+- 支持流式模型输出、工具卡片和 Ctrl+C 中断。
 
-### P2：Textual TUI
+### P2：审查、权限与运行体验
 
-- 实现响应式三栏布局；
 - 接入功能用例、接口用例、鉴权计划和脚本审查页；
-- 接入运行指标、实时日志、失败详情和报告打开入口。
+- 接入运行指标、实时日志、失败详情和报告路径入口；
+- 实现 `guarded`、`trusted-project`、`full` 三种信任模式。
 
 ### P3：会话恢复与 Agent 协议
 
@@ -619,6 +673,9 @@ src/lingtest/
 - JSON 配置不保存 API Key，并能按 `api_key_env` 自动读取对应环境变量。
 - 脚本执行前可以看到 host、危险方法、鉴权来源和环境变量清单。
 - Agent 可只依靠 JSONL 事件和退出码完成同一工作流。
+- CI 默认不会启动浏览器，用户可显式打开 HTML 报告。
+- 三种信任模式行为可测试，模型不能自行升级到 `full`。
+- 会话清理不删除用户显式输出的用例、脚本和报告。
 
 ## 20. 测试策略
 
@@ -629,13 +686,14 @@ src/lingtest/
 - 安全测试：恶意 Python 示例、路径穿越、超大文档、日志 secret 泄漏、生产 host 告警。
 - 跨平台测试：Windows 路径、POSIX 路径、UTF-8 中文文件名和终端中断。
 
-## 21. 待确认事项
+## 21. 已确认的产品决策
 
-- `chat` 是否作为首发入口，还是直接先发布完整 `tui`；
-- 鉴权计划采用独立 YAML 产物，还是嵌入接口用例文件；
-- 对签名类鉴权是否仅支持用户实现的受控 hook，避免生成器复制复杂算法；
-- HTML 报告打开动作是否默认仅打印路径，避免 CI 中尝试启动浏览器；
-- SQLite 会话的默认保留时间及清理策略。
+- 人类交互首发完整 `tui`，不单独建设 `chat`；Agent/CI 继续使用非交互 CLI。
+- 鉴权计划支持独立 YAML 和嵌入接口用例两种方式，由用户选择，默认独立文件。
+- 签名类鉴权支持用户显式指定的可信 Python hook；生成器不复制或改写签名算法。
+- HTML 报告默认只打印路径，只有显式操作才启动浏览器。
+- SQLite 内部会话默认保留 30 天，永不自动删除用户输出产物，并允许关闭或永久保留。
+- 用户可以选择 `guarded`、`trusted-project` 或 `full` 权限；完全信任必须显式开启且不关闭密钥脱敏等底线。
 
 ## 22. 参考
 
