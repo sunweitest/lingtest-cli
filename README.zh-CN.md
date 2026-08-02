@@ -301,6 +301,7 @@ Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失�
 项目背景和产品理念见博客：[AI Agent 时代如何打造高质量软件](docs/blog/ai-testing-for-vibe-coding.zh-CN.md)。
 
 UV 启动、开发调试和全新 dist 发布步骤见 [发布与开发教程](docs/LingTest发布与开发教程.html)。
+完整的人类交互流程见 [LingTest TUI 使用教程](docs/lingtestTUI使用教程.md)。
 
 ## 本地开发
 
