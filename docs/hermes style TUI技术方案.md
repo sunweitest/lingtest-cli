@@ -292,16 +292,18 @@ uv run lingtest script api-cases.yaml `
 flowchart TD
     A["Typer CLI"] --> D["Application Controller"]
     C["Textual TUI"] --> D
-    D --> E["Workflow State Machine"]
-    D --> F["Tool Registry / Domain Services"]
-    E --> G["Event Bus"]
+    D --> E["LangGraph StateGraph"]
+    E --> F["Tool Registry / Domain Services"]
+    E --> G["v3 Stream Adapter"]
+    E --> N["SQLite Checkpointer"]
     F --> H["Document + OpenAPI"]
     F --> I["LLM Provider Adapters"]
     F --> J["Artifact + Script Generator"]
     F --> K["Runner + Reports"]
     F --> L["Auth Example Parser"]
-    G --> C
-    G --> M["JSON Event Stream for Agent/CI"]
+    G --> O["LingTest Typed Event Bus"]
+    O --> C
+    O --> M["JSON Event Stream for Agent/CI"]
 ```
 
 ### 8.1 技术选型
@@ -309,9 +311,12 @@ flowchart TD
 - **Typer**：继续负责稳定的非交互命令入口。
 - **Textual + Rich**：实现全屏 TUI、响应式布局、日志窗口、数据表和键盘操作。
 - **Textual 输入组件**：统一实现多行编辑、历史记录、路径及斜杠命令补全。
-- **asyncio + typed event queue**：解耦模型流、工具进度、日志和 UI 渲染。
-- **SQLite**：保存会话、审批、产物引用和可恢复检查点。
-- **OpenAI SDK Provider Adapter**：在现有抽象上增加流式事件能力，其他兼容供应商保持同一契约。
+- **LangGraph 1.2.x**：承载确定性步骤、条件分支、审批中断、检查点和恢复。
+- **LangChain 1.3.x `create_agent`**：只用于确实需要工具循环的受限 Agent 节点，不替代确定性解析器。
+- **asyncio + typed event queue**：将 LangGraph v3 事件映射成 LingTest 稳定事件，解耦 UI 与框架协议。
+- **SQLite + LangGraph SQLite Checkpointer**：保存工作流检查点；LingTest 自有表保存会话索引、审批和产物引用。
+- **OpenAI SDK Provider Adapter**：继续作为供应商边界；LangChain/LangGraph 编排层不得绕过该配置、安全和审计抽象。
+
 ### 8.2 多 LLM Provider 与 JSON 配置
 
 LingTest 同时提供内置预设和用户自定义配置。内置预设至少包括 OpenAI、DeepSeek、Kimi、Qwen；预设提供默认 API 地址、默认模型和 API Key 环境变量名，用户仍可覆盖模型与地址。
@@ -403,7 +408,7 @@ TUI 依赖建议放入 optional extra：
 
 ```toml
 [project.optional-dependencies]
-tui = ["textual"]
+tui = ["textual", "langchain>=1.3,<1.4", "langgraph>=1.2,<1.3", "langgraph-checkpoint-sqlite"]
 ```
 
 安装方式：
@@ -426,6 +431,32 @@ class LLMProvider(Protocol):
 ```
 
 不支持原生流的 Provider Adapter 可以把完整响应包装成单个事件。
+
+### 8.4 LangGraph/LangChain 采用边界
+
+LingTest 的 TUI 工作流同时具备确定性步骤、模型节点、人工审批、中断恢复和失败补偿，已经适合采用 LangGraph。首版将 LangGraph 作为主编排器，但不把领域逻辑写进图节点：节点只读取类型化状态并调用现有 Domain Services，保证普通 CLI 仍可直接复用服务。
+
+优先采用：
+
+- `StateGraph` 表达 PRD、功能用例、接口用例、鉴权、脚本、运行和报告节点；
+- SQLite checkpointer + thread ID 支持审批中断、关闭 TUI 后恢复；
+- `stream_events(version="v3")` / `astream_events(version="v3")` 提供消息、工具、生命周期、状态和子图事件；
+- `interrupt()` + `Command(resume=...)` 实现 `guarded` 与 `trusted-project` 审批；`full` 模式通过策略决定是否插入中断，模型不能修改该策略；
+- LangChain middleware 提供模型/工具重试、调用次数限制、长会话摘要和 HITL；secret 脱敏仍由 LingTest 自有 middleware 强制执行。
+
+`create_agent` 只用于“需要模型自主选择多个只读/低风险工具”的节点，例如需求歧义澄清和失败诊断。OpenAPI 解析、文件导出、鉴权 AST 分析、脚本写入和测试运行继续使用确定性节点。不得使用已弃用的 `langgraph.prebuilt.create_react_agent`。
+
+Agent 节点使用 Pydantic Schema 作为 `response_format`。默认对多供应商使用 `ToolStrategy`；只有 Provider Profile 明确声明并通过契约测试证明支持原生结构化输出时，才启用 `ProviderStrategy`。结构化结果在进入图状态前必须再次进行领域校验。
+
+框架事件不直接成为公共协议。`LangGraphEventAdapter` 把 v3 的 message/tool/lifecycle/state 事件转换成 LingTest 的 `AssistantDelta`、`ToolStarted`、`ToolProgress`、`ToolCompleted`、`ApprovalRequested`、`RunLog` 等事件。这样将来升级 LangGraph 时，不需要同步破坏 TUI、Skill 和 CI JSONL 消费者。
+
+谨慎采用的 1.2 能力：
+
+- `TimeoutPolicy`、节点 `error_handler` 和 `RunControl.request_drain()` 放在 `OrchestrationCapabilities` 兼容层后面；若运行版本不支持，则回退到 `asyncio.timeout`、现有重试/补偿逻辑和普通 checkpoint 中断；
+- `DeltaChannel` 仍处于 beta，首版默认关闭。先通过“状态只保存摘要和产物引用”控制体积，再在长会话压测通过后用 feature flag 开启；
+- `uv.lock` 固定经过测试的 patch 版本，项目依赖只声明 `langchain>=1.3,<1.4`、`langgraph>=1.2,<1.3` 的兼容范围。
+
+首版不采用 Deep Agents。它的通用文件系统、子 Agent、任务清单和长程自治能力与当前单一测试工作流重叠，并扩大工具权限面。未来只有在明确需要多 Agent 分工、隔离上下文和远程后端时再单独评估，不能因为它版本更新而自动引入。
 
 ## 9. 工作流状态机
 
@@ -450,7 +481,7 @@ idle
 
 任何模型调用失败都可以重试；任何审查状态都可以回退到上一产物。恢复会话时从最近一次已持久化状态继续，不能自动跨过审批节点。
 
-首版使用显式状态机即可。暂不引入 LangGraph，以减少依赖和调试复杂度；当确实需要跨进程恢复、循环式失败修复、复杂分支或多 Agent 协作时，再在 Controller 与 Domain Services 之间增加可选的 LangGraph 编排层。
+首版使用 LangGraph `StateGraph` 实现上述显式状态机。图结构、状态 Schema、审批边和错误补偿必须在代码中明确声明，不能把流程控制交给模型自由规划。Controller 负责启动/恢复图运行，领域服务保持框架无关。
 
 ## 10. 统一事件模型
 
@@ -463,6 +494,8 @@ idle
 - `RunLog`：结构化请求/响应及 pytest 日志；
 - `StateChanged`：工作流状态变化；
 - `ErrorOccurred`：可重试性、错误码、用户提示。
+
+事件来源包括 LangGraph v3 Event Streaming 和现有 Runner/Provider 回调，但对外只暴露 LingTest 事件 Schema。事件适配器必须保留 `run_id`、`node`、`sequence`、`timestamp` 和脱敏后的 usage/error 元数据，并通过契约测试保证 JSONL 向后兼容。
 
 事件同时供 TUI、普通终端和 `--events jsonl` 消费，保证 Agent 无需解析彩色日志：
 
@@ -608,8 +641,12 @@ src/lingtest/
 ├── application/
 │   ├── controller.py
 │   ├── events.py
-│   ├── state_machine.py
 │   └── session_store.py
+├── orchestration/
+│   ├── workflow.py
+│   ├── state.py
+│   ├── event_adapter.py
+│   └── capabilities.py
 ├── auth/
 │   ├── example_parser.py
 │   ├── models.py
@@ -629,8 +666,9 @@ src/lingtest/
 
 ### P0：应用层与鉴权输入
 
-- 抽取 Controller、统一事件和显式状态机；
+- 抽取 Controller，建立类型化 Graph State、LangGraph `StateGraph` 和 SQLite checkpointer；
 - 为 Provider Adapter 增加 `astream()`；
+- 实现 LangGraph v3 Event Streaming 到 LingTest 事件的适配层；
 - 增加 Kimi 内置预设、JSON Provider 配置、环境变量自动发现与配置校验；
 - 实现 Python AST 鉴权示例解析器与 `AuthPlan`；
 - 为 `script` 增加 `--auth-example`；
@@ -650,15 +688,15 @@ src/lingtest/
 
 ### P3：会话恢复与 Agent 协议
 
-- SQLite 会话/审批/产物存储；
+- 完成 SQLite 会话索引、审批、产物引用、checkpoint 恢复和 30 天清理策略；
 - `--events jsonl`、稳定退出码和 `--resume`；
 - 更新 LingTest Skill，使 Agent 优先使用非交互协议。
 
-### P4：高级编排（按需求启用）
+### P4：高级 Agent 能力（按需求启用）
 
-- 失败诊断—修复—重跑闭环；
-- 可选 LangGraph 持久化编排；
-- 多 Agent 分工和远程任务队列。
+- 使用 `create_agent` + middleware 实现受限的失败诊断—修复—重跑闭环；
+- 压测并按 feature flag 评估 `DeltaChannel`；
+- 只有业务价值明确时才评估 Deep Agents、多 Agent 分工和远程任务队列。
 
 ## 19. 验收标准
 
@@ -676,13 +714,17 @@ src/lingtest/
 - CI 默认不会启动浏览器，用户可显式打开 HTML 报告。
 - 三种信任模式行为可测试，模型不能自行升级到 `full`。
 - 会话清理不删除用户显式输出的用例、脚本和报告。
+- TUI 可以在审批点关闭并通过同一 thread ID 恢复，恢复后不会重复执行已完成的副作用节点。
+- LangGraph v3 事件升级不会改变 LingTest JSONL 公共 Schema。
+- 不依赖 alpha/beta API 也能通过兼容回退完成超时、停止和错误补偿。
 
 ## 20. 测试策略
 
-- 单元测试：状态转换、事件序列化、AST 模式识别、secret 脱敏、命令解析。
+- 单元测试：Graph 状态转换、事件适配/序列化、AST 模式识别、secret 脱敏、命令解析。
 - 契约测试：各 Provider 的 `complete()`/`astream()` 行为一致。
 - 快照测试：Textual 关键屏幕、窄窗口和错误状态。
-- 集成测试：PRD → 功能用例 → API 用例 → 鉴权计划 → 脚本 → mock server → 报告。
+- 集成测试：PRD → 功能用例 → API 用例 → 鉴权计划 → 脚本 → mock server → 报告；覆盖 checkpoint 中断/恢复。
+- 兼容测试：模拟缺少 1.2 alpha/beta 能力，验证 timeout、drain、error handler 的回退路径。
 - 安全测试：恶意 Python 示例、路径穿越、超大文档、日志 secret 泄漏、生产 host 告警。
 - 跨平台测试：Windows 路径、POSIX 路径、UTF-8 中文文件名和终端中断。
 
@@ -699,3 +741,9 @@ src/lingtest/
 
 - [Hermes Agent CLI User Guide](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/cli.md)
 - [OpenClaw CLI Reference](https://docs.openclaw.ai/cli)
+- [LangChain Event Streaming](https://docs.langchain.com/oss/python/langchain/event-streaming)
+- [LangChain Structured Output](https://docs.langchain.com/oss/python/langchain/structured-output)
+- [LangChain Middleware](https://docs.langchain.com/oss/python/langchain/middleware/overview)
+- [LangGraph Event Streaming](https://docs.langchain.com/oss/python/langgraph/event-streaming)
+- [LangGraph Fault Tolerance](https://docs.langchain.com/oss/python/langgraph/fault-tolerance)
+- [LangGraph Runtime Channels](https://docs.langchain.com/oss/python/langgraph/pregel)
