@@ -432,7 +432,7 @@ class LLMProvider(Protocol):
 
 不支持原生流的 Provider Adapter 可以把完整响应包装成单个事件。
 
-### 8.4 LangGraph/LangChain 采用边界
+### LangGraph/LangChain 采用边界
 
 LingTest 的 TUI 工作流同时具备确定性步骤、模型节点、人工审批、中断恢复和失败补偿，已经适合采用 LangGraph。首版将 LangGraph 作为主编排器，但不把领域逻辑写进图节点：节点只读取类型化状态并调用现有 Domain Services，保证普通 CLI 仍可直接复用服务。
 

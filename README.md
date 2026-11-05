@@ -103,6 +103,11 @@ All installation methods provide the same `lingtest` command and Python API.
 For the staged PRD-to-API workflow, review artifacts, generated scripts, observable reports,
 and agent Skill, see [Agentic testing workflow](docs/agentic-testing-workflow.zh-CN.md).
 
+The open, agent-neutral [LingTest Testing Skill](skills/lingtest-testing/) packages test design,
+safe execution, optional code-aware diagnosis, and the LingTest CLI workflow. See the detailed
+[product direction](docs/独立验收工具产品决策.zh-CN.md) and [LingTest CLI v1.0 PRD](docs/PRD-lingtest-cli-v1.0.zh-CN.md)
+for product scope and implementation acceptance criteria.
+
 ## Quick Start
 
 Generate cases:

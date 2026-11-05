@@ -1,4 +1,4 @@
 interface:
-  display_name: "LingTest Vibe Testing"
-  short_description: "Run agentic PRD-to-API testing workflows"
-  default_prompt: "Use $lingtest-testing to turn this PRD and API document into reviewed test cases, executable tests, and an observable report."
+  display_name: "LingTest Testing"
+  short_description: "Design evidence-based acceptance tests"
+  default_prompt: "Use $lingtest-testing to plan and run evidence-based tests. When repository access is authorized, inspect relevant code for root-cause candidates and focused regression tests."

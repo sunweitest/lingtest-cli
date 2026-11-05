@@ -9,3 +9,4 @@ lingtest-cases.json
 lingtest-report.json
 junit.xml
 debug/
+.lingtest/sessions.sqlite3*
