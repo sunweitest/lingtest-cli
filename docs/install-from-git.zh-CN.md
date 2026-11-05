@@ -61,8 +61,19 @@ uv tool install --force "lingtest-cli @ git+https://github.com/sunweitest/lingte
 
 ## 确认自己装的是哪个提交
 
-`pyproject.toml` 里的版本号是发版时才改的，所以几个提交的版本号会相同（都是 `0.4.0`）。
-要确认具体提交，读安装元数据里的 `direct_url.json`：
+版本号现在由 Git tag 自动生成（`hatch-vcs`），所以 `lingtest --version` 本身就能看出距离
+上个发版有多少提交：
+
+```
+0.4.1.dev3+g97b49b9a2        # v0.4.0 之后第 1 个待发布提交 + commit 前缀
+0.4.1                         # 正好打在 v0.4.1 tag 上
+```
+
+- `dev3` 里 3 是「距离最近 tag 的提交数」，为 0 时不显示；
+- `+g<sha>` 是被安装提交的前缀，可直接拿去 `git show <sha>`；
+- 有未提交改动时会多一个 `.d20261105` 后缀（dirty）。
+
+要拿到完整 sha（40 位），读安装元数据里的 `direct_url.json`：
 
 ```bash
 python -c "import importlib.metadata as m; print(m.distribution('lingtest-cli').read_text('direct_url.json'))"

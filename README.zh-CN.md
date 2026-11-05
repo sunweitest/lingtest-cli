@@ -341,10 +341,12 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 
 ## 发布流程
 
-1. 同时更新 `pyproject.toml` 和 `src/lingtest/__init__.py` 中的版本。
-2. 运行测试、Ruff、`uv build --clear` 和 `twine check`。
-3. 提交发行版本，并创建同版本 Git tag。
-4. 配置 `UV_PUBLISH_TOKEN` 后发布：
+版本号由 Git tag 决定（`hatch-vcs`），不再手工改文件：
+
+1. 在要发布的提交上打 tag 并推送：`git tag -a v0.4.1 -m "LingTest 0.4.1" && git push origin v0.4.1`。
+   tag 上的构建版本正好是 `0.4.1`；tag 之后的提交自动变成 `0.4.2.dev3+gabc1234`。
+2. 运行测试、Ruff、`uv build --clear` 和 `twine check`（`dist/` 里的版本应等于 tag）。
+3. 配置 `UV_PUBLISH_TOKEN` 后发布：
 
 ```bash
 uv publish
