@@ -71,18 +71,22 @@ If the CLI is not installed or the source is outside its supported formats, cont
    Keep actual credentials in environment variables. For signing algorithms, use only a
    project-owned hook the user has explicitly authorized; do not invent signatures.
 
-4. Before a run, verify the target host, authorization, HTTP methods, payloads, data setup, and
+4. Complete the mandatory authentication preflight below. Never start a protected API suite with
+   an empty auth plan and treat resulting `401`/"未登录" responses as product findings.
+
+5. Before a run, verify the target host, authorization, HTTP methods, payloads, data setup, and
    required environment-variable names. Then save human and CI artifacts:
 
    ```powershell
    lingtest run artifacts/api-cases.yaml `
      --base-url http://localhost:8000 `
+     --auth-plan artifacts/auth-plan.yaml `
      -o artifacts/report.html `
      --json-output artifacts/report.json `
      --junit artifacts/junit.xml
    ```
 
-5. If a complete staged workflow is useful, run it non-interactively and consume JSONL events:
+6. If a complete staged workflow is useful, run it non-interactively and consume JSONL events:
 
    ```powershell
    lingtest workflow workflow.json --events jsonl --result artifacts/result.json
@@ -92,6 +96,62 @@ If the CLI is not installed or the source is outside its supported formats, cont
    artifact, then resume only with the user's decision. See [references/workflow.md](references/workflow.md)
    for configuration and exit-code details and [references/artifact-contracts.md](references/artifact-contracts.md)
    for artifact formats.
+
+## Mandatory authentication preflight for API testing
+
+Complete these steps before running any suite that may include protected operations:
+
+1. Inspect root-level and operation-level OpenAPI `security`, then `components.securitySchemes`.
+   Also read the project's authentication documentation and, when source inspection is authorized,
+   the existing login/auth fixture. A Bearer scheme describes how a request carries a token; it
+   does not by itself explain how to obtain that token.
+2. For FastAPI OAuth2 documentation, inspect the declared `tokenUrl` and its implementation or
+   docs. `OAuth2PasswordBearer(tokenUrl=...)` may expose a token endpoint in OpenAPI, but projects
+   still need to document the accepted form fields, test role, token response field, and any
+   project-specific setup. Do not assume every FastAPI app uses the default `username`/`password`
+   fields.
+3. With LingTest, create a secret-free, reviewable plan from OpenAPI and/or the project's auth
+   documentation, then generate/use a local helper that obtains the token before business cases
+   and attaches it to downstream requests:
+
+   ```powershell
+   lingtest auth-plan openapi.yaml --auth-doc docs/testing-auth.md `
+     -o artifacts/auth-plan.yaml
+   lingtest script artifacts/api-cases.yaml --auth-plan artifacts/auth-plan.yaml `
+     -o tests/test_api_generated.py
+   ```
+
+   Review the login URL, method, content type, body field names, token response path,
+   Authorization header/cookie, and user role before running. The helper reads credentials from
+   local environment variables or secret storage; LingTest does not need the secret value.
+4. If documentation lacks the login/token endpoint, method, fields, token response path, cookie
+   behavior, or required role, stop and ask for those details. Do not guess. A project-owned Python
+   example can be analyzed statically; never execute it during analysis.
+5. Verify token acquisition or use a harmless protected read-only endpoint before write operations.
+   If login fails, token acquisition fails, or the plan is missing for an OpenAPI-protected case,
+   LingTest marks the suite `blocked` before business requests. If the OpenAPI omitted security and
+   an unplanned request receives an unexpected `401`/`403`, LingTest marks that result `blocked`
+   for auth setup rather than counting it as a product failure. Do not classify every later `401`
+   as a separate product defect.
+6. If a valid token for the intended test role is confirmed and a protected operation still
+   returns `401`/`403`, preserve the operation, role, response evidence, and case ID without
+   storing the token. That is useful evidence for an authorization-defect candidate.
+
+### What application developers should document
+
+Prefer documenting auth through OpenAPI plus a short human-readable testing-auth section:
+
+- OpenAPI `securitySchemes` and root/operation `security` requirements;
+- OAuth2 `tokenUrl`/flow or the exact login endpoint and HTTP method;
+- required content type and field names (username, password, tenant, grant type, etc.);
+- token JSON path or cookie name, expiry/refresh behavior, and downstream header format;
+- test role/permissions and a safe read-only endpoint for validating login;
+- names of required environment variables, never example secret values;
+- test-data prerequisites and cleanup expectations.
+
+OpenAPI alone is enough only when it fully describes token acquisition. If a Bearer scheme says
+only `Authorization: Bearer`, add login details in project docs or an `x-lingtest-auth` extension.
+Never put production credentials or personal-account values in docs/examples.
 
 ## Handle missing information
 
@@ -123,10 +183,23 @@ user has not asked for test-file edits. Do not change production source while di
 the user asked for a fix. Run the narrow test and report its actual exit status; a generated but
 unexecuted test is only a proposal.
 
-LingTest CLI's current public workflow focuses on document/API artifacts and deterministic HTTP
-execution. Unless a future CLI command explicitly provides source-aware analysis, perform this
-optional mode with the coding agent's repository tools and label it as agent-assisted analysis,
-not as a LingTest CLI result.
+Source-aware diagnosis is opt-in. Use `lingtest diagnose ... --source-root .` only when source
+inspection is authorized. If an upstream coding agent already knows changed files or a stack trace,
+pass those as focused hints when supported; verify them against local files and run evidence rather
+than treating them as facts. Preserve the original test result in either case.
+
+For a failed API case, LingTest can produce a one-file unit-test diff candidate from the report
+and explicitly selected local source context:
+
+```powershell
+lingtest suggest-tests artifacts/report.json --case-id API-123 `
+  --source-root . --context-hint src/routes/orders.py `
+  --context-hint tests/test_orders.py -o artifacts/API-123.patch
+```
+
+This only writes the diff artifact. Applying it requires the explicit `--mode write` option and a
+target under `tests/` (or another directory the user explicitly selects). LingTest does not run the
+candidate automatically; report it as `not_executed` until the focused project test is run.
 
 ## Diagnose failures
 

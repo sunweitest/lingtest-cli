@@ -28,6 +28,7 @@ def generate_cases(path: str | Path) -> list[TestCase]:
         for method, operation in path_item.items():
             if method.lower() not in HTTP_METHODS or not isinstance(operation, dict):
                 continue
+            path_template = route
             parameters = [*common_parameters, *operation.get("parameters", [])]
             rendered_path, query, headers = _parameters(route, parameters)
             expected = _expected_status(operation.get("responses", {}), method)
@@ -38,13 +39,28 @@ def generate_cases(path: str | Path) -> list[TestCase]:
                     title=operation.get("summary") or operation_id.replace("_", " ").title(),
                     method=method.upper(),
                     path=rendered_path,
+                    path_template=path_template,
                     expected_status=expected,
+                    expected_result=f"HTTP {expected}",
+                    steps=[f"Send {method.upper()} {path_template}"],
+                    source_locator=str(operation.get("operationId") or path_template),
+                    requires_auth=_requires_auth(spec, operation),
                     query=query,
                     headers=headers,
                     body=_request_body(operation.get("requestBody", {})),
                 )
             )
     return cases
+
+
+def _requires_auth(spec: dict[str, Any], operation: dict[str, Any]) -> bool:
+    """Return whether OpenAPI declares a security requirement for this operation."""
+    security = operation["security"] if "security" in operation else spec.get("security", [])
+    if not isinstance(security, list) or not security:
+        return False
+    # OpenAPI security requirement objects are OR alternatives; an empty object allows
+    # unauthenticated access, while multiple schemes in one object are jointly required.
+    return all(isinstance(item, dict) and bool(item) for item in security)
 
 
 def _parameters(

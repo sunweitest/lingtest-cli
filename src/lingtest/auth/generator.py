@@ -27,6 +27,21 @@ def write_auth_plan(plan: AuthPlan, path: Path) -> None:
         raise ValueError("Auth plan output must be .json, .yaml, or .yml")
 
 
+def read_auth_plan(path: Path) -> AuthPlan:
+    """Load a reviewable authentication plan without resolving secret values."""
+
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        data = json.loads(path.read_text(encoding="utf-8"))
+    elif suffix in {".yaml", ".yml"}:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    else:
+        raise ValueError("Auth plan input must be .json, .yaml, or .yml")
+    if not isinstance(data, dict):
+        raise ValueError("Auth plan must be a JSON/YAML object")
+    return AuthPlan.model_validate(data)
+
+
 def write_test_script(
     cases: list[TestCase],
     path: Path,
@@ -65,6 +80,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import base64
 from pathlib import Path
 
 import httpx
@@ -92,10 +108,42 @@ def _json_path(payload, path):
 
 def _build_authenticated_client():
     client = httpx.Client(base_url=BASE_URL.rstrip("/"), timeout=TIMEOUT)
-    if not AUTH_PLAN or AUTH_PLAN.get("kind") in {{None, "none", "unknown", "custom_hook"}}:
+    if any(case.get("requires_auth") for case in CASES) and (
+        not AUTH_PLAN or AUTH_PLAN.get("kind") in {{None, "none"}}
+    ) and not AUTH_HOOK:
+        client.close()
+        raise RuntimeError(
+            "Protected API cases require a reviewed auth plan or approved authentication hook"
+        )
+    if not AUTH_PLAN or AUTH_PLAN.get("kind") in {{None, "none", "custom_hook"}}:
+        return client
+    kind = AUTH_PLAN.get("kind")
+    for name in AUTH_PLAN.get("required_env") or []:
+        if not os.environ.get(name):
+            client.close()
+            raise RuntimeError(f"Required authentication environment variable {{name}} is not set")
+    if kind == "unknown":
+        client.close()
+        raise RuntimeError("Authentication plan is unknown; resolve auth details before testing")
+    if kind == "basic":
+        username = os.environ[AUTH_PLAN.get("username_env") or "LINGTEST_BASIC_USERNAME"]
+        password = os.environ[AUTH_PLAN.get("password_env") or "LINGTEST_BASIC_PASSWORD"]
+        token = base64.b64encode(f"{{username}}:{{password}}".encode()).decode()
+        client.headers["Authorization"] = f"Basic {{token}}"
+        return client
+    if kind == "api_key":
+        token_name = AUTH_PLAN.get("token_env") or "LINGTEST_API_KEY"
+        _apply_token(client, AUTH_PLAN.get("apply") or {{}}, os.environ[token_name])
         return client
     login = AUTH_PLAN.get("login")
     if not login:
+        if kind in {{"bearer", "cookie"}}:
+            token_name = AUTH_PLAN.get("token_env") or (
+                "LINGTEST_COOKIE_VALUE" if kind == "cookie" else "LINGTEST_BEARER_TOKEN"
+            )
+            _apply_token(client, AUTH_PLAN.get("apply") or {{}}, os.environ[token_name])
+            return client
+        client.close()
         raise RuntimeError("Authentication plan is missing login details")
     body = {{name: _env_value(value) for name, value in login.get("body", {{}}).items()}}
     request_args = {{login.get("content_type", "json"): body}}
@@ -110,6 +158,19 @@ def _build_authenticated_client():
         template = application.get("template") or "Bearer {{token}}"
         client.headers[application["header"]] = template.format(token=token)
     return client
+
+
+def _apply_token(client, application, token):
+    template = application.get("template") or "{{token}}"
+    value = template.format(token=token)
+    if application.get("header"):
+        client.headers[application["header"]] = value
+    elif application.get("query_name"):
+        client.params = {{**dict(client.params), application["query_name"]: value}}
+    elif application.get("cookie_name"):
+        client.cookies.set(application["cookie_name"], value)
+    else:
+        raise RuntimeError("Authentication plan has no application location")
 
 
 def _load_auth_hook():
@@ -144,6 +205,14 @@ def auth_hook():
 
 @pytest.mark.parametrize("case", CASES, ids=lambda case: case["id"])
 def test_api_case(case, api_client, auth_hook):
+    login = (AUTH_PLAN or {{}}).get("login") or {{}}
+    if (
+        login
+        and case["method"].upper() == login.get("method", "POST").upper()
+        and case["path"].strip("/")
+        == login.get("path", "").split("?", 1)[0].strip("/")
+    ):
+        pytest.skip("Token endpoint was exercised during authentication setup")
     headers = dict(case.get("headers") or {{}})
     request = api_client.build_request(
         case["method"],

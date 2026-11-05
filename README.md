@@ -5,6 +5,8 @@
 LingTest CLI is a local-first AI testing agent for Vibe Coding workflows. It
 analyzes PRDs, generates validated test plans from requirements and OpenAPI,
 runs deterministic HTTP tests, and diagnoses failures with structured evidence.
+Optional code-aware diagnosis can retrieve bounded, redacted implementation/test snippets and
+propose a one-file unit-test diff; source retrieval is opt-in and writing requires `--mode write`.
 
 The deterministic core does not require an LLM or API key. Generated cases are
 plain JSON, so they can be reviewed and changed before any request is sent.
@@ -54,6 +56,7 @@ Install all developer and TUI dependencies with `uv sync --extra dev --extra tui
 - Analyze PRDs for ambiguity, contradictions, missing requirements, and testability risks.
 - Generate validated functional, boundary, exception, and API test plans with an LLM.
 - Diagnose failed HTTP tests with evidence-grounded structured output.
+- Suggest an evidence-linked unit-test patch with `lingtest suggest-tests`; review-only is the default.
 - Connect to OpenAI, DeepSeek, Qwen, or a custom OpenAI-compatible provider.
 
 ## Requirements
@@ -121,6 +124,8 @@ The open, agent-neutral [LingTest Testing Skill](skills/lingtest-testing/) packa
 safe execution, optional code-aware diagnosis, and the LingTest CLI workflow. See the detailed
 [product direction](docs/独立验收工具产品决策.zh-CN.md) and [LingTest CLI v1.0 PRD](docs/PRD-lingtest-cli-v1.0.zh-CN.md)
 for product scope and implementation acceptance criteria.
+The [`1.0.0` changelog](CHANGELOG.md) and [Chinese migration guide](docs/migration-v1.0.zh-CN.md)
+describe the versioned artifacts and behavior changes.
 
 ## Quick Start
 
@@ -139,20 +144,26 @@ lingtest run cases.json \
   -o report.json
 ```
 
-PowerShell authentication example:
+Create a secret-free auth plan from OpenAPI and the project's auth notes. Store
+test credentials in local environment variables; the runner obtains the token
+and attaches it to protected requests:
+
+```powershell
+lingtest auth-plan openapi.yaml --auth-doc docs/testing-auth.md `
+  -o artifacts/auth-plan.yaml
+```
 
 ```powershell
 lingtest run cases.json `
   --base-url https://api.example.com `
-  -H "Authorization:Bearer $env:API_TOKEN" `
+  --auth-plan artifacts/auth-plan.yaml `
   --junit junit.xml
 ```
 
-Use `-H` multiple times to add more headers:
+Use `-H` for non-secret custom headers such as tenant IDs:
 
 ```bash
 lingtest run cases.json --base-url https://api.example.com \
-  -H "Authorization:Bearer ${API_TOKEN}" \
   -H "X-Tenant-ID:demo"
 ```
 
@@ -170,6 +181,12 @@ Diagnose failed cases from a LingTest JSON report:
 lingtest diagnose report.json -o diagnosis.json
 ```
 
+Use `lingtest run --diagnose` to include root-cause candidates in the run report.
+Add `--source-root .` only when you authorize bounded, redacted source excerpts to
+be sent to the selected LLM provider. Use `--context-hint path/to/file.py` to focus
+the code search. Unexpected unauthorized responses without auth setup are blocked
+prerequisites rather than product failures.
+
 Use `--provider deepseek`, `--provider qwen`, or a custom OpenAI-compatible
 endpoint with `--provider custom --base-url URL --model MODEL`.
 
@@ -180,16 +197,12 @@ flowchart LR
     PRD["PRD / Requirements"] --> Analyze["lingtest analyze"]
     Analyze --> Analysis["analysis.json<br/>ambiguities and risks"]
 
-    PRD --> AIGenerate["lingtest ai-generate"]
-    OpenAPI["OpenAPI YAML / JSON"] --> AIGenerate
-    AIGenerate --> AIPlan["ai-cases.json<br/>validated test plan"]
-    AIPlan --> Review["Human review"]
-
     OpenAPI --> Generate["lingtest generate"]
     Generate --> Cases["cases.json<br/>executable HTTP cases"]
-    Review -.->|planned 0.3 conversion| Cases
+    PRD --> Generate
+    Cases --> Review["Human review"]
 
-    Cases --> Run["lingtest run"]
+    Review --> Run["lingtest run"]
     Runtime["Base URL + runtime headers"] --> Run
     Run --> JSONReport["report.json<br/>original evidence"]
     Run --> JUnit["junit.xml<br/>CI result"]
@@ -198,10 +211,9 @@ flowchart LR
     Diagnose --> Diagnosis["diagnosis.json<br/>classification, evidence, advice"]
 ```
 
-The solid path is implemented in `0.2.0`. AI plans remain review artifacts;
-automatic conversion from an approved AI plan to executable HTTP cases is
-planned for `0.3`. Diagnosis produces a separate file and never overwrites the
-original run report.
+`generate --strategy auto` preserves deterministic OpenAPI seeds and adds distinct AI candidates.
+Review the case bundle and test target before execution. Use `run --diagnose` to keep root-cause
+candidates beside the original evidence, or `diagnose` to write a separate diagnosis artifact.
 
 ## Commands
 
@@ -249,42 +261,44 @@ Exit codes:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | All test cases passed. |
-| `1` | One or more test cases failed or produced a request error. |
-| `2` | The command input or case file is invalid. |
+| `0` | Selected checks completed without failures or unresolved blockers. |
+| `1` | An executed case failed, errored, or a required action was rejected. |
+| `2` | Command arguments, input files, provider, or configuration are invalid. |
+| `3` | A resumable workflow needs user input or approval. |
 
 ## Case File
 
-Generated files are JSON arrays. A case looks like this:
+New generated bundles are versioned objects. Legacy root-list JSON/YAML remains readable:
 
 ```json
 {
-  "id": "get_user",
-  "title": "Get user",
-  "method": "GET",
-  "path": "/users/42",
-  "expected_status": 200,
-  "headers": {},
-  "query": {
-    "verbose": true
-  },
-  "body": null
+  "schema_version": "1.0",
+  "cases": [{
+    "id": "get_user",
+    "title": "Get user",
+    "method": "GET",
+    "path": "/users/42",
+    "expected_status": 200,
+    "requirement_refs": ["REQ-USER-01"],
+    "headers": {},
+    "query": {"verbose": true},
+    "body": null
+  }]
 }
 ```
 
-Edit `expected_status`, request values, or titles before execution. Do not put
-long-lived credentials in this file; inject them with `--header` and environment
-variables at runtime.
+Edit the case bundle before execution. Paths must be relative routes; put query values in `query`.
+Never put credentials in cases. Use a reviewed auth plan and local environment variables.
 
 ## Reports
 
 The JSON report contains the start time, base URL, and a result for each case:
 
 - case ID and title
-- `passed`, `failed`, or `error` status
+- `passed`, `failed`, `error`, `blocked`, or `skipped` status
 - request duration in milliseconds
 - expected and actual HTTP status
-- a concise error message
+- requirement references, redacted evidence, approval/input records, and root-cause candidates
 
 JUnit output can be uploaded to GitHub Actions, Jenkins, GitLab CI, Azure
 Pipelines, and other systems that support JUnit XML.
@@ -344,10 +358,10 @@ confidential requirements.
 
 ## Current Limitations
 
-- `$ref` resolution and advanced schema composition are not implemented yet.
-- Assertions currently compare the HTTP status only.
-- Cases run sequentially.
-- OpenAPI security schemes are not applied automatically.
+- Local OpenAPI `$ref` resolution and advanced schema composition are not implemented yet.
+- HTTP execution currently asserts status codes; response-schema and JSON-path assertions remain future work.
+- Cases run sequentially; bounded concurrency and retry policy remain future work.
+- Project-specific signing algorithms still require an authorized project-owned authentication hook.
 
 See [product-design.html](product-design.html) for implemented scope, design
 decisions, and the roadmap.
@@ -385,9 +399,9 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 
 The version comes from the Git tag (`hatch-vcs`); no file editing:
 
-1. Tag the commit to release and push the tag:
-   `git tag -a v0.4.1 -m "LingTest 0.4.1" && git push origin v0.4.1`.
-   A build on the tag is exactly `0.4.1`; later commits become `0.4.2.dev3+gabc1234`.
+1. Tag the reviewed release commit and push the tag, for example:
+   `git tag -a v1.0.0 -m "LingTest 1.0.0" && git push origin v1.0.0`.
+   A build on the tag uses that version; later commits use the next development version.
 2. Run tests, Ruff, `uv build --clear`, and `twine check` (the `dist/` filename must match the tag).
 3. Publish with `UV_PUBLISH_TOKEN`:
 
@@ -397,21 +411,17 @@ uv publish
 
 ## Security
 
-Only run generated cases against systems you are authorized to test. Runtime
-headers are not written to the report by version 0.2, but generated case files
-and reports should still be treated as project data.
+Only run generated cases against systems you are authorized to test. LingTest blocks protected
+operations without a usable reviewed authentication plan, redacts sensitive request and response
+fields in reports, and does not accept database credentials or generate SQL for data setup. Treat
+case bundles and reports as project data.
 
 ## Roadmap
 
-- Better OpenAPI schema and `$ref` support
-- Configuration files and named environments
-- Filtering by tag, operation, path, and method
-- JSON-path, schema, header, and latency assertions
-- Authentication strategies
-- Controlled concurrency and retries
-- Static HTML reports
-- Conversion of reviewed AI API cases into deterministic executable cases
-- pytest export and a stable plugin API
+- Local `$ref` resolution and advanced OpenAPI schema composition
+- Response schema, JSON-path, header, and latency assertions
+- Case filtering, bounded concurrency, and explicit retry policy
+- Additional project-specific auth integrations with the same secret-free review contract
 
 ## License
 

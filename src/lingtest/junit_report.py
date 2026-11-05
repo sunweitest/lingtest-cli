@@ -28,5 +28,7 @@ def write_junit(report: RunReport, path: Path) -> None:
         elif result.status == "error":
             error = SubElement(case, "error", message=result.error or result.status)
             error.text = result.error or ""
+        elif result.status in {"blocked", "skipped"}:
+            SubElement(case, "skipped", message=result.error or result.status)
     path.parent.mkdir(parents=True, exist_ok=True)
     ElementTree(suite).write(path, encoding="utf-8", xml_declaration=True)

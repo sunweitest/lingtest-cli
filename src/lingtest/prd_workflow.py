@@ -1,5 +1,6 @@
 """PRD-to-functional-test workflow with multi-format document loading."""
 
+import json
 from pathlib import Path
 
 from lingtest.ai.models import AmbiguityAnalysis, TestCasePlan
@@ -34,6 +35,7 @@ def generate_functional_plan(
     provider: LLMProvider,
     *,
     language: str = "zh-CN",
+    context_answers: dict | None = None,
 ) -> TestCasePlan:
     content = read_document(path)
     return request_structured(
@@ -44,7 +46,9 @@ def generate_functional_plan(
                 "role": "user",
                 "content": (
                     f"Respond in {language}. Generate reviewable functional, boundary, "
-                    f"and exception tests from this PRD. Do not invent requirements.\n\n{content}"
+                    f"and exception tests from this PRD. Do not invent requirements.\n\n"
+                    f"USER-PROVIDED SAFE CONTEXT (environment-variable names only for secrets):\n"
+                    f"{json.dumps(context_answers or {}, ensure_ascii=False)}\n\n{content}"
                 ),
             },
         ],

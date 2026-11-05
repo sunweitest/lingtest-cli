@@ -12,6 +12,7 @@ from lingtest.cli_v3 import register_v3_commands
 from lingtest.io import read_cases, read_report, write_cases, write_junit, write_report
 from lingtest.openapi import generate_cases
 from lingtest.runner import run_cases
+from lingtest.source_context import collect_source_context
 
 app = typer.Typer(help="AI-assisted testing for PRDs and OpenAPI.", no_args_is_help=True)
 
@@ -102,18 +103,40 @@ def diagnose(
     model: Annotated[str | None, typer.Option()] = None,
     base_url: Annotated[str | None, typer.Option()] = None,
     language: Annotated[str, typer.Option()] = "zh-CN",
+    source_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--source-root",
+            help=(
+                "Opt in to sending bounded, redacted local source excerpts "
+                "to the selected provider."
+            ),
+        ),
+    ] = None,
+    context_hint: Annotated[
+        list[str] | None,
+        typer.Option("--context-hint", help="Focus source retrieval on a project-relative file."),
+    ] = None,
 ) -> None:
-    """Use an LLM to diagnose failed and errored test results."""
+    """Diagnose failures; source-aware diagnosis is opt-in with --source-root."""
     try:
+        report = read_report(report_file)
+        context = (
+            collect_source_context(report, source_root, hints=context_hint) if source_root else None
+        )
         result = diagnose_failures(
-            read_report(report_file),
+            report,
             _create_provider(provider, model, base_url),
             language=language,
+            source_context=context,
         )
         _write_model(result, output)
     except (OSError, ValueError, ProviderError, StructuredOutputError) as exc:
         _fail(exc)
-    typer.echo(f"Diagnosed {len(result.diagnoses)} failures -> {output}")
+    typer.echo(
+        f"Diagnosed {len(result.diagnoses)} failures and found "
+        f"{len(result.root_causes)} root-cause candidates -> {output}"
+    )
 
 
 @app.command("run")

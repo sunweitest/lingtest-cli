@@ -31,7 +31,7 @@ def validate_auth_hook(reference: str, *, project_root: str | Path | None = None
     matches = [
         node
         for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == function
     ]
     if len(matches) != 1:
         raise ValueError(f"Auth hook must define one top-level function named {function!r}")

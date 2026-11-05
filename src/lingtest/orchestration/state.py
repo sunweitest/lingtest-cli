@@ -9,6 +9,7 @@ from typing_extensions import TypedDict
 WorkflowStage = Literal[
     "idle",
     "generating_functional",
+    "input_required",
     "functional_review_required",
     "functional_approved",
     "generating_api_cases",
@@ -44,6 +45,7 @@ class WorkflowState(TypedDict, total=False):
     base_url_override: str
     language: str
     auth_example: str
+    auth_document: str
     auth_plan_mode: str
     auth_plan_output: str
     script_output: str
@@ -53,6 +55,15 @@ class WorkflowState(TypedDict, total=False):
     dangerous_methods: list[str]
     artifacts: list[str]
     auth_plan: dict[str, Any]
+    input_answers: dict[str, Any]
+    pending_inputs: list[dict[str, Any]]
+    input_resume_stage: str
+    input_resolution_records: list[dict[str, Any]]
+    diagnose: bool
+    source_root: str
+    context_hints: list[str]
     approval_action: str
     approval_decision: str
+    approval_records: list[dict[str, Any]]
+    approval_artifact_sha256: dict[str, str | None]
     error: str

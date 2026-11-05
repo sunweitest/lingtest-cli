@@ -97,7 +97,7 @@ def _request_calls(tree: ast.AST) -> list[tuple[str | None, ast.Call]]:
     for node in ast.walk(tree):
         value = None
         target = None
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+        if isinstance(node, ast.Assign | ast.AnnAssign):
             value = node.value
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
                 target = _name(node.targets[0])

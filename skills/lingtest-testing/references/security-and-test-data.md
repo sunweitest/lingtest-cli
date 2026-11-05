@@ -14,12 +14,12 @@
 
 ## Test data
 
-Prefer, in this order:
+For LingTest v1.0, prefer, in this order:
 
 1. Existing project fixtures and factories.
 2. A documented test-only API or seed endpoint.
 3. A disposable database or environment reset from a known snapshot.
-4. A reviewed, project-owned setup script or SQL seed with explicit scope and cleanup.
+4. A reviewed, project-owned fixture/factory or test-only API with explicit scope and cleanup.
 
 Before creating data, identify the target environment, resource owner, expected number of affected
 records, uniqueness requirements, and cleanup plan. Use synthetic data. Do not copy production
@@ -33,13 +33,16 @@ potentially state-changing. Before execution, inspect target, operation, payload
 and cleanup/recovery behavior. Ask the user when authorization or impact is unclear. Do not infer
 permission to test production from access to a URL or credential.
 
-Never generate or run arbitrary destructive SQL or stored procedures as a convenience. Prefer an
-isolated, disposable test database and parameterized, reviewed setup code. Do not use database
-administrator accounts for test data setup.
+LingTest does not accept database credentials or generate SQL/stored procedures to create test
+data. If no existing fixture, factory, test-only API, or documented setup path can prepare the
+required data, mark the dependent case `blocked` and ask the project owner for a safe preparation
+method. Do not use database administrator accounts for test data setup.
 
 ## Target boundaries
 
 Use localhost, a local test container, or a user-configured test/staging hostname. Apply an explicit
 host allowlist when supported. If a hostname resolves or redirects outside the approved boundary,
-stop and ask for clarification. Keep provider credentials (LLM keys) separate from application
-credentials and test-target credentials.
+stop and ask for clarification. Case paths must be relative API routes; keep query parameters in the
+structured `query` field. Do not use absolute URLs in a case to bypass the approved target host.
+Keep provider credentials (LLM keys) separate from application credentials and test-target
+credentials.

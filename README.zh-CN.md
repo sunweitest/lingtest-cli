@@ -8,6 +8,8 @@ LingTest CLI 是面向 Vibe Coding 工作流的本地优先 AI 测试 Agent。�
 
 > 当前状态：`0.4.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
 
+LingTest 也提供与具体 Agent 无关的公开 [测试 Skill](skills/lingtest-testing/)，可供 Codex、Hermes、OpenCode 等调用；Skill 可单独使用，CLI 是可选的本地验收与回归执行器。鉴权测试必须先确认登录流程并获取 token，再请求受保护接口；缺少鉴权信息时会阻塞，避免把 `401`/“未登录”误报成产品 Bug。
+
 ## 0.4.0 新功能
 
 - 完整的 Hermes 风格 `lingtest tui`，包含响应式工作流、事件时间线和产物面板。
@@ -44,6 +46,8 @@ LingTest CLI 是面向 Vibe Coding 工作流的本地优先 AI 测试 Agent。�
 - 使用 LLM 检查 PRD 的歧义、矛盾、需求缺失和可测试性风险。
 - 生成经过结构校验的功能、边界、异常和 API 测试计划。
 - 根据执行证据诊断失败用例。
+- 可选读取经授权的本地源码，报告证据关联的 Bug 根因候选，并通过 `lingtest suggest-tests` 输出单测 diff；默认不写测试文件。
+- 缺少角色或测试数据时可暂停并恢复；未确认的数据前置会标为阻塞。v1.0 不连接数据库或生成 SQL 造数。
 - 支持 OpenAI、DeepSeek、Qwen 和自定义 OpenAI-compatible Provider。
 
 ## 环境要求
@@ -105,6 +109,10 @@ uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.g
 ??? PRD ? ???? ? ???? ? ???? ? ???????????
 [Agentic ?????](docs/agentic-testing-workflow.zh-CN.md)?
 
+完整工作流见[Agentic 验收与回归指南](docs/agentic-testing-workflow.zh-CN.md)，
+0.4.x 用例迁移和 1.0 产物契约见[迁移说明](docs/migration-v1.0.zh-CN.md)，
+功能范围和验收条件见 [v1.0 PRD](docs/PRD-lingtest-cli-v1.0.zh-CN.md)。
+
 ## 快速开始
 
 生成测试用例：
@@ -158,16 +166,12 @@ flowchart LR
     PRD["PRD / 需求文档"] --> Analyze["lingtest analyze"]
     Analyze --> Analysis["analysis.json<br/>歧义、矛盾和风险"]
 
-    PRD --> AIGenerate["lingtest ai-generate"]
-    OpenAPI["OpenAPI YAML / JSON"] --> AIGenerate
-    AIGenerate --> AIPlan["ai-cases.json<br/>结构校验后的测试计划"]
-    AIPlan --> Review["人工审核"]
-
     OpenAPI --> Generate["lingtest generate"]
     Generate --> Cases["cases.json<br/>可执行 HTTP 用例"]
-    Review -.->|0.3 计划实现的转换| Cases
+    PRD --> Generate
+    Cases --> Review["人工审核"]
 
-    Cases --> Run["lingtest run"]
+    Review --> Run["lingtest run"]
     Runtime["Base URL + 运行时 Header"] --> Run
     Run --> JSONReport["report.json<br/>原始执行证据"]
     Run --> JUnit["junit.xml<br/>CI 测试结果"]
@@ -176,7 +180,7 @@ flowchart LR
     Diagnose --> Diagnosis["diagnosis.json<br/>分类、证据和建议"]
 ```
 
-实线表示 `0.2.0` 已经实现的数据流。AI 测试计划目前仍是需要人工审核的中间产物；把审核后的 AI 用例自动转换为确定性 HTTP 用例计划在 `0.3` 实现。诊断结果单独保存，不会覆盖原始运行报告。
+`generate --strategy auto` 保留确定性 OpenAPI 种子，并补充不同的 AI 候选用例。执行前应审阅用例包和目标环境。`run --diagnose` 可在原始运行证据旁附加根因候选；单独运行 `diagnose` 时则写入独立诊断产物。
 
 ## 命令说明
 
@@ -218,40 +222,43 @@ lingtest run CASES_FILE --base-url URL [OPTIONS]
 
 | 退出码 | 含义 |
 | --- | --- |
-| `0` | 所有测试用例通过。 |
-| `1` | 至少一个用例失败或发生请求错误。 |
-| `2` | 命令输入或用例文件无效。 |
+| `0` | 所选检查执行完成，没有失败或未解决的阻塞项。 |
+| `1` | 已执行用例失败、执行出错或用户拒绝必需操作。 |
+| `2` | 命令参数、输入文件、Provider 或配置无效。 |
+| `3` | 可恢复工作流需要用户补充输入或审批。 |
 
 ## 用例文件
 
-生成文件是 JSON 数组，单个用例如下：
+新生成的用例包是带版本号的对象；仍可读取旧版 JSON/YAML 根列表：
 
 ```json
 {
-  "id": "get_user",
-  "title": "Get user",
-  "method": "GET",
-  "path": "/users/42",
-  "expected_status": 200,
-  "headers": {},
-  "query": {
-    "verbose": true
-  },
-  "body": null
+  "schema_version": "1.0",
+  "cases": [{
+    "id": "get_user",
+    "title": "Get user",
+    "method": "GET",
+    "path": "/users/42",
+    "expected_status": 200,
+    "requirement_refs": ["REQ-USER-01"],
+    "headers": {},
+    "query": {"verbose": true},
+    "body": null
+  }]
 }
 ```
 
-执行前可以修改 `expected_status`、请求参数或标题。不要把长期有效的凭据写入文件；应通过环境变量和 `--header` 在运行时注入。
+执行前可编辑用例包。path 必须是相对路由；query 参数放入 `query`。不要在用例中放凭据；使用经过审阅的鉴权计划和本地环境变量。
 
 ## 报告
 
 JSON 报告包含开始时间、base URL 和每个用例的执行结果：
 
 - 用例 ID 和标题
-- `passed`、`failed` 或 `error` 状态
+- `passed`、`failed`、`error`、`blocked` 或 `skipped` 状态
 - 毫秒级请求耗时
 - 预期和实际 HTTP 状态码
-- 简洁的错误信息
+- 需求引用、脱敏证据、审批/输入记录和根因候选
 
 JUnit XML 可以上传到 GitHub Actions、Jenkins、GitLab CI、Azure Pipelines 等支持 JUnit 的平台。
 
@@ -305,10 +312,10 @@ Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失�
 
 ## 当前限制
 
-- 暂未实现 `$ref` 解析和高级 schema 组合。
-- 当前只断言 HTTP 状态码。
-- 用例按顺序执行。
-- 暂不自动处理 OpenAPI security schemes。
+- 尚未实现本地 OpenAPI `$ref` 解析和高级 schema 组合。
+- HTTP 运行目前断言状态码；响应 schema 和 JSONPath 断言待后续实现。
+- 用例按顺序执行；有界并发和重试策略待后续实现。
+- 项目自定义签名算法需要经授权的项目内鉴权 hook。
 
 完整的产品边界、技术设计和路线图见 [product-design.html](product-design.html)。
 
@@ -343,8 +350,8 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 
 版本号由 Git tag 决定（`hatch-vcs`），不再手工改文件：
 
-1. 在要发布的提交上打 tag 并推送：`git tag -a v0.4.1 -m "LingTest 0.4.1" && git push origin v0.4.1`。
-   tag 上的构建版本正好是 `0.4.1`；tag 之后的提交自动变成 `0.4.2.dev3+gabc1234`。
+1. 在完成审阅的发行提交上打 tag 并推送，例如：`git tag -a v1.0.0 -m "LingTest 1.0.0" && git push origin v1.0.0`。
+   tag 上的构建版本使用该 tag 对应版本；之后的提交使用下一个开发版本号。
 2. 运行测试、Ruff、`uv build --clear` 和 `twine check`（`dist/` 里的版本应等于 tag）。
 3. 配置 `UV_PUBLISH_TOKEN` 后发布：
 
@@ -354,19 +361,14 @@ uv publish
 
 ## 安全说明
 
-只能对已获得授权的系统执行测试。0.2 版本不会把运行时 Header 写入报告，但生成的用例和报告仍应按项目数据进行保护。
+只能对已获得授权的系统执行测试。受保护操作缺少可用且经审阅的鉴权计划时会被阻塞；报告会脱敏敏感请求/响应字段；LingTest 不接收数据库凭据，也不会生成造数 SQL。用例包和报告仍应按项目数据进行保护。
 
 ## 路线图
 
-- 完善 OpenAPI schema 和 `$ref` 支持
-- 配置文件和命名环境
-- 按 tag、operation、path 和 method 过滤
-- JSON path、schema、Header 和耗时断言
-- 认证策略
-- 可控并发和重试
-- 静态 HTML 报告
-- 把审核后的 AI API 用例转换为确定性可执行用例
-- pytest 导出和稳定插件 API
+- 本地 `$ref` 解析和高级 OpenAPI schema 组合
+- 响应 schema、JSONPath、Header 和耗时断言
+- 用例筛选、有界并发和显式重试策略
+- 保持 secret-free 审阅契约的更多项目鉴权集成
 
 ## License
 

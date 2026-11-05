@@ -26,6 +26,7 @@ HELP = """[b]LingTest commands[/b]
 /start PRD INTERFACE [BASE_URL]  start the complete workflow
 /workflow CONFIG.json           start from a JSON workflow configuration
 /approve | /reject              resolve the current approval gate
+/answers PATH.json             resume a needs_input request (secrets use env-var references)
 /resume SESSION_ID              select a resumable session
 /sessions                       list saved sessions
 /provider [NAME]                show or select an LLM provider
@@ -183,6 +184,8 @@ class LingTestTUI(App[None]):
             self._start(config)
         elif command in {"/approve", "/reject"}:
             self._resume("approve" if command == "/approve" else "reject")
+        elif command == "/answers":
+            self._resume_with_answers(args)
         elif command == "/resume":
             self._select_session(args)
         elif command == "/sessions":
@@ -218,6 +221,26 @@ class LingTestTUI(App[None]):
             exclusive=True,
         )
 
+    def _resume_with_answers(self, args: list[str]) -> None:
+        if not self.thread_id:
+            raise ValueError("No active session")
+        if len(args) != 1:
+            raise ValueError("Usage: /answers PATH.json")
+        path = self._project_path(args[0])
+        answers = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(answers, dict):
+            raise ValueError("Answer file must contain a JSON object keyed by request_id")
+        self._cancel_requested.clear()
+        self._log("Resuming with validated non-secret answers and local environment references.")
+        command = Command(resume={"answers": answers})
+        self.run_worker(
+            lambda: self._stream_worker(command),
+            name="workflow-resume",
+            group="workflow",
+            thread=True,
+            exclusive=True,
+        )
+
     def _stream_worker(self, payload: dict[str, Any] | Command) -> None:
         try:
             for event in self.engine.stream(payload, thread_id=self.thread_id):
@@ -241,7 +264,21 @@ class LingTestTUI(App[None]):
                 self.latest_state = state
                 self._refresh(state)
         elif event.type == "ApprovalRequested":
-            self._log("[bold yellow]Approval required. Use /approve or /reject.[/bold yellow]")
+            interrupts = event.data.get("interrupts") or []
+            request = interrupts[0] if interrupts and isinstance(interrupts[0], dict) else {}
+            if request.get("action") == "provide_inputs":
+                self._log(
+                    "[bold yellow]Input required. Resume with /answers PATH.json.[/bold yellow]"
+                )
+                for item in request.get("requests", []):
+                    if isinstance(item, dict):
+                        self._log(
+                            f"[{escape(str(item.get('type', 'string')))}] "
+                            f"{escape(str(item.get('request_id', '')))}: "
+                            f"{escape(str(item.get('prompt', '')))}"
+                        )
+            else:
+                self._log("[bold yellow]Approval required. Use /approve or /reject.[/bold yellow]")
         elif event.type == "ArtifactCreated":
             self._log(f"[cyan]Artifact: {escape(str(event.data.get('path', '')))}[/cyan]")
         elif event.type == "ApprovalResolved":
@@ -249,6 +286,9 @@ class LingTestTUI(App[None]):
                 f"Approval {escape(str(event.data.get('action', '')))}: "
                 f"{escape(str(event.data.get('decision', '')))}"
             )
+        elif event.type == "input_resolved":
+            request_ids = ", ".join(event.data.get("request_ids", []))
+            self._log(f"Input confirmed for: {escape(request_ids)} (values are not logged)")
         elif event.type == "AssistantDelta":
             self._log(escape(str(event.data.get("text", ""))))
         elif event.type == "ErrorOccurred":
@@ -259,7 +299,9 @@ class LingTestTUI(App[None]):
         self.latest_state = message.state
         self._refresh(message.state)
         stage = str(message.state.get("stage", "unknown"))
-        if stage.endswith("review_required"):
+        if stage == "input_required":
+            self._log("[bold yellow]User input required. Use /answers PATH.json.[/bold yellow]")
+        elif stage.endswith("review_required") or stage == "run_approval_required":
             self._log("[bold yellow]Paused for review. Use /approve or /reject.[/bold yellow]")
         else:
             self._log(f"[bold green]Workflow finished: {escape(stage)}[/bold green]")
@@ -312,7 +354,9 @@ class LingTestTUI(App[None]):
         self.thread_id = args[0]
         self.latest_state = state
         self._refresh(state)
-        self._log("Session selected. Use /approve or /reject at an approval gate.")
+        self._log(
+            "Session selected. Use /approve or /reject for approvals, /answers PATH.json for input."
+        )
 
     def _show_sessions(self) -> None:
         rows = self.engine.sessions.list()

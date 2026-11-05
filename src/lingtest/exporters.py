@@ -47,6 +47,13 @@ def _plan_markdown(plan: TestCasePlan) -> str:
         "",
         *([f"- {risk}" for risk in plan.risks] or ["- 暂无"]),
         "",
+        "## 待补充信息",
+        "",
+        *(
+            [f"- `{item.request_id}`（{item.type}）：{item.prompt}" for item in plan.input_requests]
+            or ["- 暂无"]
+        ),
+        "",
         "## 测试用例",
         "",
     ]
@@ -58,7 +65,12 @@ def _plan_markdown(plan: TestCasePlan) -> str:
                 f"- 类型：`{case.case_type}`",
                 f"- 优先级：`{case.priority}`",
                 f"- 来源需求：{case.source_requirement or '未标注'}",
+                f"- 需求引用：{', '.join(case.requirement_refs) or '未标注'}",
                 f"- 前置条件：{'；'.join(case.preconditions) or '无'}",
+                f"- 用户角色：{case.user_role or '未指定'}",
+                f"- 数据前置：{'；'.join(case.data_prerequisites) or '无'}",
+                f"- 数据准备：{'；'.join(case.data_setup) or '无'}",
+                f"- 数据清理：{'；'.join(case.data_cleanup) or '无'}",
                 "",
                 "步骤：",
                 "",
@@ -76,6 +88,11 @@ def _plan_html(plan: TestCasePlan) -> str:
     for case in plan.test_cases:
         steps = "".join(f"<li>{html.escape(step)}</li>" for step in case.steps)
         preconditions = "".join(f"<li>{html.escape(item)}</li>" for item in case.preconditions)
+        data_requirements = "".join(
+            f"<li>{html.escape(item)}</li>" for item in case.data_prerequisites
+        )
+        setup = "".join(f"<li>{html.escape(item)}</li>" for item in case.data_setup)
+        cleanup = "".join(f"<li>{html.escape(item)}</li>" for item in case.data_cleanup)
         cards.append(
             f"""
             <article class="case">
@@ -86,15 +103,29 @@ def _plan_html(plan: TestCasePlan) -> str:
                   <span class="priority">{html.escape(case.priority)}</span></div>
               </div>
               <p class="source">来源：{html.escape(case.source_requirement or "未标注")}</p>
+              <p class="source">需求引用：{html.escape(", ".join(case.requirement_refs) or "未标注")}</p>
+              <p class="source">用户角色：{html.escape(case.user_role or "未指定")}</p>
               <div class="columns">
                 <section><h3>前置条件</h3><ul>{preconditions or "<li>无</li>"}</ul></section>
                 <section><h3>执行步骤</h3><ol>{steps}</ol></section>
+              </div>
+              <div class="columns">
+                <section><h3>测试数据前置</h3><ul>{data_requirements or "<li>无</li>"}</ul></section>
+                <section><h3>准备与清理</h3><ul>{setup}{cleanup or "<li>无清理步骤</li>"}</ul></section>
               </div>
               <div class="expected"><strong>预期结果</strong>
                 <p>{html.escape(case.expected_result)}</p></div>
             </article>"""
         )
     risks = "".join(f"<li>{html.escape(risk)}</li>" for risk in plan.risks) or "<li>暂无</li>"
+    input_requests = (
+        "".join(
+            f"<li><code>{html.escape(item.request_id)}</code> ({html.escape(item.type)}): "
+            f"{html.escape(item.prompt)}</li>"
+            for item in plan.input_requests
+        )
+        or "<li>暂无</li>"
+    )
     return f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -118,7 +149,8 @@ border-left:4px solid var(--brand);border-radius:6px}}.expected p{{margin:4px 0}
 </style></head><body><header><h1>功能测试用例</h1>
 <p class="summary">{html.escape(plan.summary)}</p></header><main>
 <section class="overview"><div><div class="count">{len(plan.test_cases)}</div>条用例</div>
-<div><strong>已识别风险</strong><ul>{risks}</ul></div></section>
+<div><strong>已识别风险</strong><ul>{risks}</ul>
+<strong>待补充信息</strong><ul>{input_requests}</ul></div></section>
 {"".join(cards)}</main></body></html>"""
 
 
@@ -132,6 +164,7 @@ def _plan_xlsx(plan: TestCasePlan, path: Path) -> None:
         "类型",
         "优先级",
         "来源需求",
+        "需求引用",
         "前置条件",
         "步骤",
         "预期结果",
@@ -152,6 +185,7 @@ def _plan_xlsx(plan: TestCasePlan, path: Path) -> None:
                 case.case_type,
                 case.priority,
                 case.source_requirement,
+                ", ".join(case.requirement_refs),
                 "\n".join(case.preconditions),
                 "\n".join(f"{index}. {step}" for index, step in enumerate(case.steps, 1)),
                 case.expected_result,
@@ -160,7 +194,7 @@ def _plan_xlsx(plan: TestCasePlan, path: Path) -> None:
                 case.expected_status or "",
             ]
         )
-    widths = [20, 30, 14, 10, 30, 30, 48, 40, 10, 28, 12]
+    widths = [20, 30, 14, 10, 30, 24, 30, 48, 40, 10, 28, 12]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     for row in sheet.iter_rows(min_row=2):

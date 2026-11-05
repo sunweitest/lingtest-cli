@@ -7,7 +7,8 @@ existing test tools.
 
 ## Install
 
-This folder follows the Agent Skills `SKILL.md` directory format. Copy the complete
+This folder follows the open [Agent Skills specification](https://agentskills.io/specification)
+and its `SKILL.md` directory format. Copy the complete
 `lingtest-testing` directory into the skills directory supported by your agent, or use that agent's
 skill installer with this repository and the `lingtest-testing` skill name. Keep the `references/`
 directory beside `SKILL.md` so the agent can load the detailed testing and security guidance when
