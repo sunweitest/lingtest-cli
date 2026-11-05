@@ -1,5 +1,6 @@
 from typer.testing import CliRunner
 
+from lingtest import __version__
 from lingtest.cli import app
 
 
@@ -7,7 +8,9 @@ def test_version() -> None:
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout.strip() == "0.4.0"
+    # version comes from the git tag (hatch-vcs), so assert the shape, not a literal
+    assert result.stdout.strip() == __version__
+    assert __version__.split("+")[0].replace(".dev", "")[0].isdigit()
 
 
 def test_analyze_command_with_fake_provider(monkeypatch, tmp_path) -> None:

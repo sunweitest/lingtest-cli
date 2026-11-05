@@ -1,0 +1,51 @@
+name: git-install
+
+# Guards the "install straight from a commit" path: every push must be
+# installable without publishing a PyPI release.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  install-from-git:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install from this exact commit over git
+        run: |
+          uv venv --python ${{ matrix.python-version }} .git-install-venv
+          VIRTUAL_ENV=.git-install-venv uv pip install \
+            "lingtest-cli[tui] @ git+https://github.com/${{ github.repository }}.git@${{ github.sha }}"
+
+      - name: Smoke test the installed CLI
+        run: |
+          .git-install-venv/bin/lingtest --version
+          .git-install-venv/bin/lingtest providers
+          .git-install-venv/bin/python - <<'PY'
+          import importlib.metadata as m
+          direct = m.distribution("lingtest-cli").read_text("direct_url.json")
+          assert "vcs_info" in direct and "commit_id" in direct, direct
+          print("direct_url.json:", direct)
+          PY
+
+      - name: Generate and run cases from the installed package
+        run: |
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/.git-install-venv/bin/lingtest" generate \
+            "$GITHUB_WORKSPACE/examples/openapi.yaml" --strategy deterministic -o cases.json
+          "$GITHUB_WORKSPACE/.git-install-venv/bin/lingtest" run cases.json \
+            --base-url http://127.0.0.1:9 -o report.json --timeout 2 || true
+          test -s report.json
+
+      - name: Build wheel from the same tree
+        run: |
+          uv build --wheel
+          ls -l dist/

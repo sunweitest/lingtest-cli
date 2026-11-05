@@ -88,6 +88,20 @@ uv run lingtest --help
 
 所有安装方式都会提供相同的 `lingtest` 命令和 Python API。
 
+### 直接从 Git 安装（发版之前）
+
+PyPI 上的版本会落后于仓库，任何提交都可以直接装：
+
+```bash
+uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+```
+
+需要复现时用完整 commit sha（`...git@<sha>`）；装完想知道是哪个提交，读安装元数据里的
+`direct_url.json`。仓库的 `git-install` CI 会在每次 push 时验证「这个提交能被 Git 装上」，
+所以 CI 绿就等于可装。extra、升级、回滚与排错见
+[从 Git 直接安装](docs/install-from-git.zh-CN.md)。
+
+
 ??? PRD ? ???? ? ???? ? ???? ? ???????????
 [Agentic ?????](docs/agentic-testing-workflow.zh-CN.md)?
 
@@ -327,10 +341,12 @@ uv run lingtest generate examples/openapi.yaml -o cases.json
 
 ## 发布流程
 
-1. 同时更新 `pyproject.toml` 和 `src/lingtest/__init__.py` 中的版本。
-2. 运行测试、Ruff、`uv build --clear` 和 `twine check`。
-3. 提交发行版本，并创建同版本 Git tag。
-4. 配置 `UV_PUBLISH_TOKEN` 后发布：
+版本号由 Git tag 决定（`hatch-vcs`），不再手工改文件：
+
+1. 在要发布的提交上打 tag 并推送：`git tag -a v0.4.1 -m "LingTest 0.4.1" && git push origin v0.4.1`。
+   tag 上的构建版本正好是 `0.4.1`；tag 之后的提交自动变成 `0.4.2.dev3+gabc1234`。
+2. 运行测试、Ruff、`uv build --clear` 和 `twine check`（`dist/` 里的版本应等于 tag）。
+3. 配置 `UV_PUBLISH_TOKEN` 后发布：
 
 ```bash
 uv publish
