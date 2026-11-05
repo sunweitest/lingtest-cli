@@ -74,7 +74,7 @@ def build_authenticated_client(
         raise ValueError("Authentication plan is missing login details")
     try:
         body = {name: _resolve_env(value) for name, value in plan.login.body.items()}
-        request_args = {plan.login.content_type: body}
+        request_args = {"data": body} if plan.login.content_type == "form" else {"json": body}
         response = client.request(plan.login.method, plan.login.path, **request_args)
         response.raise_for_status()
         if plan.kind == "bearer":

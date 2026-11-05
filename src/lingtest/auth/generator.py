@@ -146,7 +146,11 @@ def _build_authenticated_client():
         client.close()
         raise RuntimeError("Authentication plan is missing login details")
     body = {{name: _env_value(value) for name, value in login.get("body", {{}}).items()}}
-    request_args = {{login.get("content_type", "json"): body}}
+    request_args = (
+        {{"data": body}}
+        if login.get("content_type", "json") == "form"
+        else {{"json": body}}
+    )
     response = client.request(login.get("method", "POST"), login["path"], **request_args)
     response.raise_for_status()
     if AUTH_PLAN["kind"] == "bearer":

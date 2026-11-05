@@ -103,8 +103,11 @@ def test_workflow_cli_emits_jsonl_and_result(tmp_path: Path, monkeypatch) -> Non
 
     assert result.exit_code == 0, result.output
     event = json.loads(result.stdout.strip())
-    assert event["type"] == "StateChanged"
-    assert event["run_id"] == "jsonl-session"
+    assert event["schema_version"] == "1.0"
+    assert event["type"] == "workflow_completed"
+    assert event["session_id"] == "jsonl-session"
+    assert event["stage"] == "completed"
+    assert {"event_id", "timestamp", "sequence", "node", "data"}.issubset(event)
     assert json.loads(result_path.read_text(encoding="utf-8"))["stage"] == "completed"
 
 

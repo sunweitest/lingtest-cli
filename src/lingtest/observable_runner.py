@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Callable
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -88,7 +89,7 @@ def run_cases(
             input_resolutions=input_resolutions,
         )
 
-    with client:
+    with closing(client):
         for case in cases:
             _emit_run_event(
                 event_callback,
