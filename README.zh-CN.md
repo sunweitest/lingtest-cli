@@ -88,6 +88,20 @@ uv run lingtest --help
 
 所有安装方式都会提供相同的 `lingtest` 命令和 Python API。
 
+### 直接从 Git 安装（发版之前）
+
+PyPI 上的版本会落后于仓库，任何提交都可以直接装：
+
+```bash
+uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+```
+
+需要复现时用完整 commit sha（`...git@<sha>`）；装完想知道是哪个提交，读安装元数据里的
+`direct_url.json`。仓库的 `git-install` CI 会在每次 push 时验证「这个提交能被 Git 装上」，
+所以 CI 绿就等于可装。extra、升级、回滚与排错见
+[从 Git 直接安装](docs/install-from-git.zh-CN.md)。
+
+
 ??? PRD ? ???? ? ???? ? ???? ? ???????????
 [Agentic ?????](docs/agentic-testing-workflow.zh-CN.md)?
 

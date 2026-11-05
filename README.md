@@ -85,6 +85,20 @@ pipx install lingtest-cli
 `pipx` creates a dedicated environment while making the `lingtest` command
 available globally. This avoids dependency conflicts with application projects.
 
+### Straight from Git (before a release)
+
+PyPI lags the repository; any commit can be installed directly:
+
+```bash
+uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+```
+
+Pin a full commit sha when you need reproducibility, and read
+`direct_url.json` to see which commit is installed. Every push is checked by the
+`git-install` CI workflow, so a green pipeline means the commit is installable.
+See [docs/install-from-git.zh-CN.md](docs/install-from-git.zh-CN.md) for extras,
+upgrades, rollbacks and troubleshooting.
+
 ### Isolated CLI with `uv`
 
 ```bash
