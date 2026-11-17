@@ -8,6 +8,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  install-base:
+    # `pip install lingtest-cli` without extras must work: langgraph is optional,
+    # so the CLI cannot import it eagerly. This job is the guard for that.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install without optional extras
+        run: |
+          uv venv .base-venv --python 3.12
+          VIRTUAL_ENV=.base-venv uv pip install .
+
+      - name: CLI works without extras and ships the skill
+        run: |
+          .base-venv/bin/lingtest --version
+          .base-venv/bin/lingtest skill --print | grep -q "First principle"
+          .base-venv/bin/lingtest skill --json
+          .base-venv/bin/lingtest generate examples/openapi.yaml \
+            --strategy deterministic -o /tmp/base-cases.json
+
+      - name: Wheel contains the skill directory
+        run: |
+          uv build --wheel
+          python - <<'PY'
+          import glob, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          assert any(n.endswith("_skills/lingtest-testing/SKILL.md") for n in names), names
+          assert any(n.endswith("_skills/lingtest-testing/references/test-strategy.md") for n in names)
+          print("skill files:", sum("_skills" in n for n in names))
+          PY
+
   install-from-git:
     runs-on: ubuntu-latest
     strategy:

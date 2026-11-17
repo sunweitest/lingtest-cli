@@ -12,6 +12,8 @@ from lingtest.cli_v3 import register_v3_commands
 from lingtest.io import read_cases, read_report, write_cases, write_junit, write_report
 from lingtest.openapi import generate_cases
 from lingtest.runner import run_cases
+from lingtest.skill_bundle import export as export_skill
+from lingtest.skill_bundle import skill_dir, skill_file
 from lingtest.source_context import collect_source_context
 
 app = typer.Typer(help="AI-assisted testing for PRDs and OpenAPI.", no_args_is_help=True)
@@ -187,6 +189,49 @@ def _write_model(model, path: Path) -> None:
 def _fail(exc: Exception) -> None:
     typer.echo(f"Error: {exc}", err=True)
     raise typer.Exit(2) from exc
+
+
+@app.command("skill")
+def skill_command(
+    print_content: Annotated[
+        bool, typer.Option("--print", help="Print SKILL.md content instead of its path.")
+    ] = False,
+    export_to: Annotated[
+        Path | None,
+        typer.Option("--export", help="Copy the whole skill directory to this path."),
+    ] = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Emit path metadata as JSON for agents.")
+    ] = False,
+) -> None:
+    """Show, print, or export the bundled LingTest testing skill."""
+    try:
+        directory = skill_dir()
+        document = skill_file()
+    except FileNotFoundError as exc:
+        _fail(exc)
+        return
+
+    if export_to is not None:
+        target = export_skill(export_to)
+        typer.echo(f"Exported skill -> {target}")
+        return
+
+    if print_content:
+        typer.echo(document.read_text(encoding="utf-8"))
+        return
+
+    if as_json:
+        typer.echo(json.dumps({
+            "name": directory.name,
+            "skill_md": str(document),
+            "directory": str(directory),
+            "version": __version__,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    typer.echo(str(document))
+    typer.echo(f"# references: {directory / 'references'}", err=True)
 
 
 register_v3_commands(app)

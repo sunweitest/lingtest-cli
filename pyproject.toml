@@ -56,6 +56,10 @@ Issues = "https://github.com/sunweitest/lingtest-cli/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/lingtest"]
 
+[tool.hatch.build.targets.wheel.force-include]
+# 让 pip 装出来的包里也带测试 skill（不止是 git 仓库里有）
+"skills/lingtest-testing" = "lingtest/_skills/lingtest-testing"
+
 [tool.hatch.version]
 source = "vcs"
 
