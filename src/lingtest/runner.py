@@ -20,6 +20,7 @@ def run_cases(
             actual_status = None
             error = None
             status = "error"
+            assertion_results = []
             try:
                 response = client.request(
                     case.method,
@@ -30,7 +31,6 @@ def run_cases(
                 )
                 actual_status = response.status_code
                 status = "passed" if actual_status == case.expected_status else "failed"
-                assertion_results = []
                 if status == "passed" and case.assertions:
                     # 与 observable_runner 保持一致：状态码错了就不评估断言
                     assertion_results = evaluate(

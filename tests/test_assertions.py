@@ -167,3 +167,38 @@ def test_assertions_are_not_evaluated_when_status_is_wrong(monkeypatch) -> None:
     assert result.status == "failed"
     assert result.assertion_results == []
     assert "expected HTTP 200, got HTTP 500" in (result.error or "")
+
+
+def test_request_error_keeps_error_status_with_assertions(monkeypatch) -> None:
+    """连接失败时不能因为断言变量未初始化而抛 UnboundLocalError（CI 回归）。"""
+    def boom(request):
+        raise httpx.ConnectError("connection refused", request=request)
+
+    transport = httpx.MockTransport(boom)
+    original = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: original(transport=transport, **kwargs))
+    case = ApiTestCase(
+        id="down", title="Down", method="GET", path="/api/game/quota",
+        expected_status=200, assertions=[Assertion(path="$.used_today", equals=1)],
+    )
+    result = run_cases([case], "http://testserver").results[0]
+    assert result.status == "error"
+    assert result.assertion_results == []
+
+
+def test_observable_runner_also_keeps_error_status(monkeypatch) -> None:
+    from lingtest.observable_runner import run_cases as observable_run
+
+    def boom(request):
+        raise httpx.ConnectError("connection refused", request=request)
+
+    transport = httpx.MockTransport(boom)
+    original = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: original(transport=transport, **kwargs))
+    case = ApiTestCase(
+        id="down", title="Down", method="GET", path="/api/game/quota",
+        expected_status=200, assertions=[Assertion(path="$.used_today", equals=1)],
+    )
+    result = observable_run([case], "http://testserver").results[0]
+    assert result.status == "error"
+    assert result.assertion_results == []

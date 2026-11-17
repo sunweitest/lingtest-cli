@@ -179,6 +179,7 @@ def run_cases(
                 logs.append("Authentication hook setup succeeded")
             elif auth_plan and auth_plan.kind not in {"none", "unknown"}:
                 logs.append("Authentication plan setup succeeded")
+            assertion_results = []
             try:
                 request = client.build_request(
                     case.method,
@@ -195,7 +196,6 @@ def run_cases(
                 response_headers = _redact_headers(dict(response.headers))
                 response_body = _redact_response_body(response)
                 status = "passed" if actual_status == case.expected_status else "failed"
-                assertion_results = []
                 if status == "passed" and case.assertions:
                     # 状态码正确时才评估业务断言：状态码已经错的用例，报断言失败只会掩盖主因
                     assertion_results = evaluate(
