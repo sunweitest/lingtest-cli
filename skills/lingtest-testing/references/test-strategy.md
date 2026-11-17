@@ -13,6 +13,16 @@ implementation's internal algorithm can share the same defect as the code under 
 When a requirement cannot be turned into a concrete assertion, mark it as untestable with the
 missing decision or interface needed to proceed.
 
+## Means are not the goal
+
+Choose the mechanism that can observe the behavior, not the one that is easiest to write down. A
+declarative API runner, a concurrency script, a load tool, a read-only query, and a manual check are
+all legitimate means; what matters is whether the check can fail for a real regression.
+
+When a decision (auth role, fixture, environment) is missing, pause and ask one focused question
+rather than substituting a weaker check that will pass. A skipped or downgraded case must be visible
+in the report as `blocked` or `smoke`, never as coverage.
+
 ## Select scenarios by risk
 
 Start with a compact suite, ordered by impact and likelihood:

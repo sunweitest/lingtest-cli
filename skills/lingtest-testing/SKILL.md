@@ -7,6 +7,30 @@ description: Plan and run evidence-based acceptance and regression tests for AI-
 
 Use this skill to test an application independently of the agent or person who wrote it. Treat requirements, API contracts, existing tests, and observed behavior as evidence. A generated test is only useful when its expected result has a source and its assertion can detect a meaningful defect.
 
+## First principle: find real defects, by any legitimate means
+
+The purpose of testing is to find defects that matter. Tooling is a means; it is never the definition
+of the test. A suite is worth what its failures can actually catch, not what its runner can express.
+
+- **When the runner cannot express a check, escalate — do not downgrade.** Concurrency races,
+  ordering, idempotency, persisted state, cross-service effects, timing, and content quality usually
+  fall outside a declarative API runner. Reach for the mechanism that can express them: a short
+  asyncio/thread script, a load tool, a read-only query, two responses diffed against each other.
+  Turning such a case into "expect HTTP 200" is not coverage, it is decoration.
+- **"Not supported by the tool" is never a result.** It must not appear in the report as a property
+  of the system under test, nor stay as a silent omission. Run it another way, or ask for what is
+  missing and mark the case `blocked`. A known defect that the suite cannot reach is a gap in the
+  suite, not a pass.
+- **A pass that cannot fail is not evidence.** Before executing, ask what regression would break each
+  case. If the answer is "nothing", the case is a smoke check — label it as such instead of counting
+  it as requirement coverage.
+- **Scale effort to risk, not to case count.** One concurrency probe that exposes a 500 is worth
+  fifty reads returning 200.
+- **Record the means.** Note how each check ran (runner, script, manual) so a failure is
+  reproducible and a gap is visible.
+- **Means stop at authorization.** Destructive calls, production content writes, credentials, and
+  test data still need explicit approval. "Find bugs by any means" is not licence to cause them.
+
 ## Operating rules
 
 1. **Establish scope first.** Identify the repository, branch or revision, application under test, environment, and user-authorized targets. Do not probe a host just because it appears in a document.
