@@ -102,6 +102,9 @@ color:var(--muted)}}.diagnosis{{padding:18px;margin:20px 0;background:white;bord
 .cause h3{{margin:0 0 6px}}.muted{{color:var(--muted)}}@media(max-width:980px){{.metrics{{grid-template-columns:repeat(4,1fr)}}}}
 @media(max-width:780px){{.metrics{{grid-template-columns:1fr 1fr}}summary{{grid-template-columns:
 80px 1fr}}summary .duration,summary .status-code{{display:none}}.grid{{display:block}}}}
+table.checks{{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}}
+table.checks th,table.checks td{{border:1px solid #e5e7eb;padding:4px 6px;text-align:left}}
+table.checks tr.ok{{background:#f0fff4}} table.checks tr.bad{{background:#fff5f5}}
 </style></head><body><header><h1>API 测试报告</h1>
 <p class="subtitle">{html.escape(report.base_url)} · {html.escape(report.started_at.isoformat())} · revision {html.escape(report.revision or 'unknown')} · worktree {worktree}</p>
 <section class="metrics"><div class="metric"><b>{total}</b><span>总用例</span></div>
@@ -196,6 +199,22 @@ def _result_card(result) -> str:
     steps = "".join(f"<li>{html.escape(step)}</li>" for step in result.steps)
     step_section = f"<h3>步骤</h3><ol>{steps}</ol>" if steps else ""
     requirements = "、".join(html.escape(item) for item in result.requirement_refs) or "未关联"
+    checks = ""
+    if result.assertion_results:
+        rows = "".join(
+            f'<tr class="{("ok" if item.passed else "bad")}">'
+            f"<td>{html.escape(item.target)}</td><td>{html.escape(item.operator)}</td>"
+            f"<td><code>{html.escape(json.dumps(item.expected, ensure_ascii=False))}</code></td>"
+            f"<td><code>{html.escape(json.dumps(item.actual, ensure_ascii=False))}</code></td>"
+            f"<td>{'通过' if item.passed else html.escape(item.detail)}</td></tr>"
+            for item in result.assertion_results
+        )
+        passed_checks = sum(1 for item in result.assertion_results if item.passed)
+        checks = (
+            f"<h3>业务断言（{passed_checks}/{len(result.assertion_results)} 通过）</h3>"
+            "<table class=\"checks\"><thead><tr><th>目标</th><th>操作</th><th>期望</th>"
+            f"<th>实际</th><th>结果</th></tr></thead><tbody>{rows}</tbody></table>"
+        )
     return f"""<details id="{html.escape(result.case_id, quote=True)}" data-status="{result.status}"><summary>
 <span class="badge {result.status}">{result.status.upper()}</span>
 <span><strong>{html.escape(result.title)}</strong><br>
@@ -204,7 +223,7 @@ def _result_card(result) -> str:
 <span class="duration">{result.duration_ms:.1f} ms</span></summary>
 <div class="detail">{error}<p><strong>预期：</strong>HTTP {result.expected_status} · {html.escape(result.expected_result)}
 <br><strong>需求引用：</strong>{requirements} · <strong>鉴权：</strong>{'是' if result.requires_auth else '否'}</p>
-{step_section}<div class="grid"><section><h3>请求</h3>
+{step_section}{checks}<div class="grid"><section><h3>请求</h3>
 <pre>{html.escape(json.dumps(request, ensure_ascii=False, indent=2))}</pre></section>
 <section><h3>响应</h3><pre>{html.escape(json.dumps(response, ensure_ascii=False, indent=2))}</pre></section>
 </div><h3>执行日志</h3><pre>{html.escape(logs)}</pre></div></details>"""

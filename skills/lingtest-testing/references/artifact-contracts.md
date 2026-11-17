@@ -38,6 +38,34 @@ body: null
 Reject cases without a concrete method, path, or expected status. Keep IDs unique. Do not include
 credentials.
 
+`expected_status` is not the only oracle. A case may add `assertions` — declarative checks against
+the response body or headers — when the requirement is about behavior rather than transport:
+
+```yaml
+assertions:
+  - path: "$.used_today"        # JSONPath-lite: $.a.b[0]
+    equals: 1                   # 次数只在成功时扣一次
+  - path: "$.scene_description"
+    min_length: 50              # 空剧情不算通过
+  - path: "$.points"
+    gte: 0
+  - header: "content-type"
+    contains: "application/json"
+```
+
+Operators: `equals`, `not_equals`, `contains`, `min_length`, `gte`, `lte`, `type`
+(`string|integer|number|boolean|array|object|null`), `exists`. Exactly one operator per item, and
+exactly one of `path` or `header`. Unsupported path syntax is rejected when the bundle is loaded,
+never silently ignored.
+
+Semantics: assertions run only when the status code matches `expected_status` (a 500 should not also
+produce five assertion failures). A missing path is a failure, not a pass. Assertion failures are
+reported with target, expected, and actual values, and set `error_category="assertion"`.
+
+`lingtest generate --schema-assertions` can seed structural assertions (required fields + JSON
+types) from documented 2xx schemas. Those only prove shape, not business rules — review them like
+any generated expectation.
+
 ## Authentication plan and case bundle
 
 The standalone YAML contains `kind`, optional `login`, `extract`, `apply`, optional reviewed

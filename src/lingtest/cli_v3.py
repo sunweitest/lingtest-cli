@@ -151,6 +151,13 @@ def register_v3_commands(app: typer.Typer) -> None:
         base_url: Annotated[str | None, typer.Option()] = None,
         provider_config: Annotated[Path | None, typer.Option("--provider-config")] = None,
         language: Annotated[str, typer.Option()] = "zh-CN",
+        schema_assertions: Annotated[
+            bool,
+            typer.Option(
+                "--schema-assertions",
+                help="Add assertions for required fields and JSON types from 2xx schemas.",
+            ),
+        ] = False,
     ) -> None:
         """Generate executable API cases using deterministic, AI, or hybrid auto mode."""
         try:
@@ -184,6 +191,8 @@ def register_v3_commands(app: typer.Typer) -> None:
                     auth_seeds=seeds,
                 )
                 input_requests = plan.input_requests
+            if schema_assertions:
+                cases = _attach_schema_assertions(cases, interface_document)
             write_cases(cases, output, input_requests=input_requests)
         except (
             OSError,
@@ -805,6 +814,46 @@ def _write_auth_artifact(
     target = requested or output.with_suffix(".cases.yaml")
     write_cases(cases, target, auth_plan=plan, embed_auth=True)
     return target
+
+
+def _attach_schema_assertions(cases, spec_path: Path):
+    """Attach top-level required-field/type assertions from documented 2xx schemas."""
+    from lingtest.assertions import from_schema
+    from lingtest.openapi import load_spec
+
+    spec = load_spec(spec_path)
+    if not isinstance(spec, dict):
+        return cases
+    resolved = (spec.get("components") or {}).get("schemas") or {}
+    index: dict[tuple[str, str], dict] = {}
+    for route, operations in (spec.get("paths") or {}).items():
+        if not isinstance(operations, dict):
+            continue
+        for method, operation in operations.items():
+            if not isinstance(operation, dict):
+                continue
+            for code in ("200", "201", "202", "204"):
+                schema = (
+                    ((operation.get("responses") or {}).get(code) or {})
+                    .get("content", {})
+                    .get("application/json", {})
+                    .get("schema")
+                )
+                if schema:
+                    index[(method.upper(), route)] = schema
+                    break
+    attached = 0
+    for case in cases:
+        schema = index.get((case.method.upper(), case.path_template or case.path))
+        if not schema:
+            continue
+        derived = from_schema(schema, resolved=resolved)
+        if derived:
+            case.assertions = [*case.assertions, *derived]
+            attached += len(derived)
+    if attached:
+        typer.echo(f"Attached {attached} schema assertions from documented responses", err=True)
+    return cases
 
 
 def _openapi_seeds(path: Path):

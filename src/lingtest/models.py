@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from lingtest.assertions import Assertion, AssertionResult
+
 
 class InputRequest(BaseModel):
     request_id: str = Field(min_length=1)
@@ -80,6 +82,7 @@ class TestCase(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     query: dict[str, Any] = Field(default_factory=dict)
     body: Any | None = None
+    assertions: list[Assertion] = Field(default_factory=list)
 
     @field_validator("path")
     @classmethod
@@ -142,6 +145,7 @@ class TestResult(BaseModel):
     request_body: Any | None = None
     response_headers: dict[str, str] = Field(default_factory=dict)
     response_body: str | None = None
+    assertion_results: list[AssertionResult] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
 
 

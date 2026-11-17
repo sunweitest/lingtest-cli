@@ -55,8 +55,15 @@ If the CLI is not installed or the source is outside its supported formats, cont
    ```
 
    Use `deterministic` when exact schema-derived cases are preferred, `auto` to add AI-proposed
-   boundary and exception scenarios, or `ai` for unstructured interface documents. Inspect all
-   generated cases and their expected results before execution.
+   boundary and exception scenarios, or `ai` for unstructured interface documents. Add
+   `--schema-assertions` to derive required-field and type checks from documented 2xx schemas.
+   Inspect all generated cases and their expected results before execution.
+
+   A status code is a weak oracle: `200 OK` with an empty story, a wrong counter, or a leaked
+   field still passes. For any case whose requirement is about behavior (billing, ownership,
+   ordering, state transitions, content quality), add `assertions` on the response — see
+   [references/artifact-contracts.md](references/artifact-contracts.md). A case that cannot assert
+   such behavior should be labeled a smoke check, not counted as requirement coverage.
 
 3. For non-trivial authentication, inspect a project-owned example statically and review the
    resulting plan. Do not execute the example during analysis:

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
+from lingtest.assertions import evaluate, summarize
 from lingtest.auth.models import AuthHook, AuthPlan
 from lingtest.auth.runtime import build_authenticated_client, load_auth_hook
 from lingtest.models import InputRequest, RunReport, TestCase, TestResult
@@ -194,6 +195,24 @@ def run_cases(
                 response_headers = _redact_headers(dict(response.headers))
                 response_body = _redact_response_body(response)
                 status = "passed" if actual_status == case.expected_status else "failed"
+                assertion_results = []
+                if status == "passed" and case.assertions:
+                    # 状态码正确时才评估业务断言：状态码已经错的用例，报断言失败只会掩盖主因
+                    assertion_results = evaluate(
+                        case.assertions,
+                        body=response_body,
+                        headers=dict(response.headers),
+                    )
+                    failed_assertions = summarize(assertion_results)
+                    if failed_assertions:
+                        status = "failed"
+                        error = failed_assertions
+                        error_category = "assertion"
+                        logs.append(failed_assertions)
+                    else:
+                        logs.append(
+                            f"All {len(assertion_results)} assertions passed"
+                        )
                 if (
                     status == "failed"
                     and actual_status in {401, 403}
@@ -205,7 +224,7 @@ def run_cases(
                         "confirm the login flow and rerun before treating this as an API failure"
                     )
                 logs.append(f"Received HTTP {actual_status}")
-                if status == "failed":
+                if status == "failed" and actual_status != case.expected_status:
                     error = f"expected HTTP {case.expected_status}, got HTTP {actual_status}"
                     error_category = "authorization" if actual_status in {401, 403} else "assertion"
                     logs.append(error)
@@ -254,6 +273,7 @@ def run_cases(
                 request_body=_redact_payload(case.body),
                 response_headers=response_headers,
                 response_body=response_body,
+                assertion_results=assertion_results,
                 logs=logs,
             )
             results.append(result)
