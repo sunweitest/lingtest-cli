@@ -6,10 +6,14 @@ LingTest CLI 是任意代码 Agent 都可调用的本地验收与回归工具；
 
 ## 1. 安装与检查项目
 
-```powershell
-uv tool install lingtest-cli
+PyPI 上的版本落后于仓库（目前仍是 `0.4.0`，没有断言能力和内置 Skill），因此从 Git 安装：
+
+```bash
+uv tool install "lingtest-cli[tui] @ git+https://github.com/sunweitest/lingtest-cli.git@main"
 lingtest --version
 ```
+
+需要可复现环境时钉住 tag：`...lingtest-cli.git@v0.5.3`。`[tui]` 只在用 `tui`/`workflow` 时需要。
 
 Agent 先读取仓库的 `AGENTS.md`、测试说明、PRD/OpenAPI、测试配置和现有 fixture。确认目标环境、
 允许的副作用、已有测试命令与输出位置。默认黑盒，不扫描或上传整个仓库。源代码分析必须由用户

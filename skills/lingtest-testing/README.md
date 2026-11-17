@@ -20,11 +20,37 @@ vendor-neutral and does not require Codex, Hermes, OpenCode, or another particul
 ## Optional: install LingTest CLI
 
 The skill does not require LingTest. When structured API case generation, approval-gated execution,
-or JSON/JUnit/HTML evidence is useful, install the CLI separately:
+or JSON/JUnit/HTML evidence is useful, install the CLI separately.
 
-```powershell
-uv tool install lingtest-cli
+PyPI lags this repository (the published package is still `0.4.0`, without assertions or the
+bundled skill), so install straight from Git:
+
+```bash
+uv tool install "lingtest-cli[tui] @ git+https://github.com/sunweitest/lingtest-cli.git@main"
 lingtest --version
+```
+
+Pin a release when you need a reproducible environment:
+
+```bash
+uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@v0.5.3"
+```
+
+`pipx` and `pip` accept the same direct reference:
+
+```bash
+pipx install "git+https://github.com/sunweitest/lingtest-cli.git@main"
+python -m pip install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+```
+
+The `[tui]` extra is only needed for `lingtest tui` / `lingtest workflow`; `run`, `generate`,
+`auth-plan`, `diagnose`, and `skill` work without it.
+
+The wheel bundles this skill, so an installed CLI can also place it where an agent expects it:
+
+```bash
+lingtest skill --print          # read SKILL.md
+lingtest skill --export ~/.hermes/skills   # copy SKILL.md + references/
 ```
 
 The agent must still review generated cases and target scope before running state-changing tests.

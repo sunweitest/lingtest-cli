@@ -70,6 +70,13 @@ LingTest 也提供与具体 Agent 无关的公开 [测试 Skill](skills/lingtest
 
 ## 安装
 
+> **PyPI 落后于本仓库** —— 已发布的包仍是 `0.4.0`，没有断言能力、`lingtest skill` 和基础安装修复。
+> 在 `0.5.x` 发布之前，请从 Git 安装：
+>
+> ```bash
+> uv tool install "lingtest-cli[tui] @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+> ```
+
 ### 使用标准 `pip`
 
 安装到当前 Python 环境或已经激活的虚拟环境：
@@ -338,7 +345,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv tool install lingtest-cli
+      # PyPI 落后于仓库，0.5.x 发布前从 main 安装
+      - run: uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
       - run: lingtest generate openapi.yaml -o cases.json
       - run: lingtest run cases.json --base-url "${{ secrets.TEST_API_URL }}" --junit junit.xml
 ```

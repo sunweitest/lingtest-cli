@@ -82,6 +82,13 @@ Install all developer and TUI dependencies with `uv sync --extra dev --extra tui
 
 ## Installation
 
+> **PyPI is behind this repository** — the published package is still `0.4.0`, without assertions,
+> `lingtest skill`, or the base-install fix. Until `0.5.x` is published, install from Git:
+>
+> ```bash
+> uv tool install "lingtest-cli[tui] @ git+https://github.com/sunweitest/lingtest-cli.git@main"
+> ```
+
 ### Standard `pip`
 
 Install into the active Python environment or virtual environment:
@@ -386,7 +393,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv tool install lingtest-cli
+      # PyPI lags the repository; install the current main until 0.5.x is published
+      - run: uv tool install "lingtest-cli @ git+https://github.com/sunweitest/lingtest-cli.git@main"
       - run: lingtest generate openapi.yaml -o cases.json
       - run: lingtest run cases.json --base-url "${{ secrets.TEST_API_URL }}" --junit junit.xml
 ```
