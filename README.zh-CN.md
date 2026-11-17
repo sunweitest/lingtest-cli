@@ -6,9 +6,19 @@ LingTest CLI 是面向 Vibe Coding 工作流的本地优先 AI 测试 Agent。�
 
 基础能力是确定性的，不依赖大模型或 API Key。生成结果使用普通 JSON 保存，用户可以在发出任何请求前审阅和修改。
 
-> 当前状态：`0.4.0` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
+> 当前状态：`0.5.2` Alpha。1.0 之前，用例格式和 Python API 仍可能调整。
 
-LingTest 也提供与具体 Agent 无关的公开 [测试 Skill](skills/lingtest-testing/)，可供 Codex、Hermes、OpenCode 等调用；Skill 可单独使用，CLI 是可选的本地验收与回归执行器。鉴权测试必须先确认登录流程并获取 token，再请求受保护接口；缺少鉴权信息时会阻塞，避免把 `401`/“未登录”误报成产品 Bug。
+LingTest 也提供与具体 Agent 无关的公开 [测试 Skill](skills/lingtest-testing/)，可供 Codex、Hermes、OpenCode 等调用；Skill 可单独使用，CLI 是可选的本地验收与回归执行器。Skill 现在也打包进 wheel，装完用 `lingtest skill --print` 就能读到，不必克隆仓库。鉴权测试必须先确认登录流程并获取 token，再请求受保护接口；缺少鉴权信息时会阻塞，避免把 `401`/“未登录”误报成产品 Bug。
+
+## 0.5.2 新功能
+
+- **声明式断言**：用例不只断言状态码，还能断言响应体与响应头 —— `equals`、`not_equals`、
+  `contains`、`min_length`、`gte`、`lte`、`type`、`exists`，路径为 JSONPath 子集。
+  语法在载入时校验，字段缺失判失败，失败信息带目标、期望值和实际值。
+- **`lingtest skill`**：打印 / 输出 / 导出内置测试 Skill；wheel 里已包含 `skills/lingtest-testing`。
+- **修复基础安装**：`pip install lingtest-cli` 不再需要 `tui` extra，`langgraph` 改为懒加载，
+  裸装也能跑 `lingtest --version`。
+- `lingtest generate --schema-assertions`：从文档化的 2xx schema 派生 required 字段与类型断言（默认关闭）。
 
 ## 0.4.0 新功能
 
@@ -49,6 +59,8 @@ LingTest 也提供与具体 Agent 无关的公开 [测试 Skill](skills/lingtest
 - 可选读取经授权的本地源码，报告证据关联的 Bug 根因候选，并通过 `lingtest suggest-tests` 输出单测 diff；默认不写测试文件。
 - 缺少角色或测试数据时可暂停并恢复；未确认的数据前置会标为阻塞。v1.0 不连接数据库或生成 SQL 造数。
 - 支持 OpenAI、DeepSeek、Qwen 和自定义 OpenAI-compatible Provider。
+- 用声明式断言校验业务行为（响应体与响应头），而不只是状态码。
+- 测试 Skill 随包分发，`lingtest skill --print` 即可读取。
 
 ## 环境要求
 
@@ -204,6 +216,16 @@ lingtest generate SPEC [-o OUTPUT]
 
 `SPEC` 是 OpenAPI YAML 或 JSON 文件。默认输出文件为 `lingtest-cases.json`。
 
+### `lingtest skill`
+
+```text
+lingtest skill [--print] [--export DIR] [--json]
+```
+
+wheel 内置 `skills/lingtest-testing` —— 也就是 Agent 在设计与执行测试前应当先读的那份 Skill。
+不带参数打印 `SKILL.md` 路径；`--print` 输出全文；`--export DIR` 复制 `SKILL.md` 与
+`references/`；`--json` 输出 `{name, skill_md, directory, version}` 供程序解析。
+
 ### `lingtest run`
 
 ```text
@@ -249,6 +271,32 @@ lingtest run CASES_FILE --base-url URL [OPTIONS]
 ```
 
 执行前可编辑用例包。path 必须是相对路由；query 参数放入 `query`。不要在用例中放凭据；使用经过审阅的鉴权计划和本地环境变量。
+
+### 断言
+
+`expected_status` 只说明请求被接受，断言才说明行为正确。每条断言针对一个值，且只用一个操作符：
+
+```json
+{
+  "id": "quota_after_action",
+  "title": "一次成功行动只扣一次次数",
+  "method": "GET",
+  "path": "/api/game/quota",
+  "expected_status": 200,
+  "assertions": [
+    {"path": "$.used_today", "equals": 1},
+    {"path": "$.remaining", "gte": 0},
+    {"path": "$.daily_limit", "type": "integer"},
+    {"header": "content-type", "contains": "application/json"}
+  ]
+}
+```
+
+- 路径是 JSONPath 子集：`$.used_today`、`$.scene.choices[0].name`。
+- 操作符：`equals`、`not_equals`、`contains`、`min_length`、`gte`、`lte`、`type`、`exists`。
+- 字段不存在判**失败**，不会静默通过。
+- 只有状态码符合预期时才评估断言，避免一个 500 顺带刷出五条断言失败。
+- 语法错误或一条断言里写了两个操作符，载入时即报错。
 
 ## 报告
 
@@ -313,8 +361,8 @@ Provider 返回内容会先提取 JSON，再通过 Pydantic 校验。校验失�
 ## 当前限制
 
 - 尚未实现本地 OpenAPI `$ref` 解析和高级 schema 组合。
-- HTTP 运行目前断言状态码；响应 schema 和 JSONPath 断言待后续实现。
-- 用例按顺序执行；有界并发和重试策略待后续实现。
+- 断言支持 JSONPath 子集与固定操作符集合；暂不支持正则、值变换和跨请求断言。
+- 用例按顺序执行；有界并发和重试策略待后续实现 —— 竞态类检查请用脚本或压测工具。
 - 项目自定义签名算法需要经授权的项目内鉴权 hook。
 
 完整的产品边界、技术设计和路线图见 [product-design.html](product-design.html)。

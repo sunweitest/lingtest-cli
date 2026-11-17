@@ -13,6 +13,19 @@ plain JSON, so they can be reviewed and changed before any request is sent.
 
 > Status: `0.4.0` alpha. The file format and Python API may evolve before 1.0.
 
+## What's New in 0.5.2
+
+- **Declarative assertions.** A case can check the response body and headers, not only the status
+  code: `equals`, `not_equals`, `contains`, `min_length`, `gte`, `lte`, `type`, `exists` over
+  JSONPath-lite paths. Syntax is validated when the bundle loads, a missing field fails the case,
+  and failures report target, expected, and actual values.
+- **`lingtest skill`** prints, dumps, or exports the bundled testing skill, which now ships inside
+  the wheel — agents can read it without cloning the repository.
+- **Base install fixed.** `pip install lingtest-cli` no longer needs the `tui` extra; `langgraph`
+  is imported lazily, so `lingtest --version` works on a bare install.
+- `lingtest generate --schema-assertions` seeds required-field and JSON-type checks from documented
+  2xx schemas (off by default).
+
 ## What's New in 0.4.0
 
 - Full-screen Hermes-style `lingtest tui` with responsive workflow, timeline, and artifact panels.
@@ -57,6 +70,8 @@ Install all developer and TUI dependencies with `uv sync --extra dev --extra tui
 - Generate validated functional, boundary, exception, and API test plans with an LLM.
 - Diagnose failed HTTP tests with evidence-grounded structured output.
 - Suggest an evidence-linked unit-test patch with `lingtest suggest-tests`; review-only is the default.
+- Assert business behavior with declarative response assertions (body and headers).
+- Ship the testing skill inside the package (`lingtest skill --print`).
 - Connect to OpenAI, DeepSeek, Qwen, or a custom OpenAI-compatible provider.
 
 ## Requirements
@@ -239,7 +254,19 @@ lingtest generate SPEC [-o OUTPUT]
 ```
 
 `SPEC` is an OpenAPI YAML or JSON file. The default output is
-`lingtest-cases.json`.
+`lingtest-cases.json`. Add `--schema-assertions` to seed required-field and JSON-type assertions
+from documented 2xx schemas; `--strategy` selects `deterministic`, `ai`, or `auto`.
+
+### `lingtest skill`
+
+```text
+lingtest skill [--print] [--export DIR] [--json]
+```
+
+The wheel bundles `skills/lingtest-testing` — the skill an agent should read before designing or
+running tests. Without options it prints the `SKILL.md` path; `--print` dumps the content,
+`--export DIR` copies `SKILL.md` plus `references/`, and `--json` emits
+`{name, skill_md, directory, version}` for programmatic use.
 
 ### `lingtest run`
 
@@ -289,6 +316,34 @@ New generated bundles are versioned objects. Legacy root-list JSON/YAML remains 
 
 Edit the case bundle before execution. Paths must be relative routes; put query values in `query`.
 Never put credentials in cases. Use a reviewed auth plan and local environment variables.
+
+### Assertions
+
+`expected_status` says the request was accepted; assertions say the behavior is correct. Each item
+targets one value from the response and applies exactly one operator:
+
+```json
+{
+  "id": "quota_after_action",
+  "title": "Quota decrements once per successful action",
+  "method": "GET",
+  "path": "/api/game/quota",
+  "expected_status": 200,
+  "assertions": [
+    {"path": "$.used_today", "equals": 1},
+    {"path": "$.remaining", "gte": 0},
+    {"path": "$.daily_limit", "type": "integer"},
+    {"header": "content-type", "contains": "application/json"}
+  ]
+}
+```
+
+- Paths are JSONPath-lite: `$.used_today`, `$.scene.choices[0].name`.
+- Operators: `equals`, `not_equals`, `contains`, `min_length`, `gte`, `lte`, `type`, `exists`.
+- A missing field is a failure, never a pass.
+- Assertions run only when the status code matches, so a `500` does not also emit five assertion
+  failures.
+- Invalid syntax or two operators in one item is rejected when the bundle loads.
 
 ## Reports
 
@@ -359,8 +414,10 @@ confidential requirements.
 ## Current Limitations
 
 - Local OpenAPI `$ref` resolution and advanced schema composition are not implemented yet.
-- HTTP execution currently asserts status codes; response-schema and JSON-path assertions remain future work.
-- Cases run sequentially; bounded concurrency and retry policy remain future work.
+- Assertions support JSONPath-lite paths and a fixed operator set; no regex, transforms, or
+  cross-request assertions yet.
+- Cases run sequentially; bounded concurrency and retry policy remain future work — use a short
+  script or a load tool for races.
 - Project-specific signing algorithms still require an authorized project-owned authentication hook.
 
 See [product-design.html](product-design.html) for implemented scope, design
